@@ -21,7 +21,7 @@ from app.modules.network import show_network_toolkit
 from app.modules.pm2 import show_pm2_manager
 
 # Version of the application
-__version__ = "2.1.51"
+__version__ = "2.1.52"
 
 console = Console()
 
@@ -64,7 +64,7 @@ def main_menu():
             style=questionary.Style([
                 ('pointer', 'bold fg:yellow'),
                 ('highlighted', 'bold fg:yellow'),
-                ('selected', 'fg:white bg:dark_blue'),
+                ('selected', 'fg:white bg:blue'),
             ])
         ).ask()
 

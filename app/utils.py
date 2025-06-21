@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import time
+from datetime import timedelta
 
 import psutil
 from rich.console import Console
@@ -72,12 +73,24 @@ def run_command_live(command, log_filename):
             return None
 
 def get_uptime():
-    boot_time = psutil.boot_time()
-    uptime_seconds = time.time() - boot_time
-    days, rem = divmod(uptime_seconds, 86400)
-    hours, rem = divmod(rem, 3600)
-    minutes, _ = divmod(rem, 60)
-    return f"{int(days)}d {int(hours)}h {int(minutes)}m"
+    """Returns the system uptime."""
+    try:
+        with open('/proc/uptime', 'r') as f:
+            uptime_string = f.readline().split()[0]
+        uptime_seconds = float(uptime_string)
+        return str(timedelta(seconds=uptime_seconds))
+    except (IOError, ValueError):
+        return "N/A"
+
+def run_command_for_output(command):
+    """A reusable utility to run a command and capture its output."""
+    try:
+        result = subprocess.run(
+            command, shell=True, check=True, capture_output=True, text=True, encoding='utf-8', timeout=15
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        return ""
 
 def get_top_processes(sort_by='cpu_percent'):
     procs = []

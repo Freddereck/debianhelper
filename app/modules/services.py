@@ -9,20 +9,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
 from app.translations import t
+from app.utils import run_command_for_output
 
 console = Console()
-
-def run_command_for_output(command):
-    """A local utility to run a command and capture its output, for simplicity."""
-    try:
-        # Using shell=True for simplicity with pipes, but be cautious with user input.
-        # In this module, inputs are controlled, so it's relatively safe.
-        result = subprocess.run(
-            command, shell=True, check=True, capture_output=True, text=True, encoding='utf-8', timeout=15
-        )
-        return result.stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-        return ""
 
 # --- WireGuard Management ---
 
