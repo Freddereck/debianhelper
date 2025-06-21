@@ -128,6 +128,8 @@
     "certbot_menu_test_renewal": "Протестировать авто-обновление",
     "certbot_get_cert_instructions": "Запуск Certbot. Следуйте интерактивным подсказкам, чтобы выбрать домен и настроить HTTPS.",
     "certbot_testing_renewal": "Выполнение тестового запуска процесса обновления...",
+    "certbot_menu_list_certs": "Показать существующие сертификаты",
+    "certbot_listing_certs": "Получение списка сертификатов",
 
     "menu_web_server_manager": "Менеджер веб-сервера",
     "nginx_not_installed": "Nginx не установлен. Этот модуль требует Nginx.",
@@ -143,6 +145,27 @@
     "nginx_reload_success": "Nginx успешно перезагружен.",
     "nginx_restarting": "Перезапуск Nginx...",
     "nginx_restart_success": "Nginx успешно перезапущен.",
+    "nginx_menu_list_sites": "Показать настроенные сайты",
+    "nginx_listing_sites": "Получение списка активных сайтов",
+    "nginx_no_sites_found": "Активных сайтов не найдено.",
+    "error_listing_sites": "Ошибка получения списка сайтов: {error}",
+    "nginx_sites_enabled_not_found": "Директория не найдена: {path}",
+    
+    "mysql_menu_list_db": "Показать базы данных",
+    "mysql_listing_databases": "Получение списка баз данных MySQL",
+
+    "postgresql_menu_list_db": "Показать базы данных",
+    "postgresql_listing_databases": "Получение списка баз данных PostgreSQL",
+
+    "fail2ban_menu_list_jails": "Показать 'тюрьмы' и забаненные IP",
+    "fail2ban_listing_jails": "Получение статуса Fail2Ban...",
+    "fail2ban_menu_unban_ip": "Разбанить IP-адрес",
+    "fail2ban_prompt_jail": "Введите имя 'тюрьмы' (например, sshd):",
+    "fail2ban_prompt_ip": "Введите IP-адрес для разбана:",
+    "fail2ban_unbanning_ip": "Попытка разбанить {ip} в 'тюрьме' {jail}...",
+
+    "nextcloud_wizard_title": "Мастер установки Nextcloud",
+    "feature_not_implemented_yet": "Эта функция еще не реализована. Следите за обновлениями!",
 
     "java_installer_title": "Установщик Java (OpenJDK)",
     "java_prompt_which_version": "Какую версию Java вы хотите установить?",
@@ -274,12 +297,12 @@
     "docker_menu_manage_networks": "Управление сетями",
     "docker_menu_prune": "Очистить систему",
     "docker_menu_back": "Назад в главное меню",
-    "docker_press_enter": "Нажмите Enter для возврата.",
+    "docker_press_enter": "Нажмите Enter для продолжения...",
 
-    "docker_prune_confirm": "Это удалит все неиспользуемые контейнеры, сети и образы. Вы уверены?",
-    "docker_prune_success": "Система Docker успешно очищена.",
-    "docker_prune_reclaimed": "Освобождено места от образов: {space} МБ",
-    "docker_prune_error": "Ошибка при очистке системы: {error}",
+    "docker_prune_confirm": "Это удалит все неиспользуемые Docker-образы. Вы уверены?",
+    "docker_prune_success": "Очистка Docker прошла успешно.",
+    "docker_prune_reclaimed": "Освобождено места: {space} МБ",
+    "docker_prune_error": "Ошибка во время очистки Docker: {error}",
 
     "docker_containers_prompt": "Выберите контейнер для управления:",
     "docker_containers_error_list": "Не удалось получить список контейнеров: {error}",
@@ -477,5 +500,16 @@
     "firewall_menu_enable_prompt": "UFW неактивен. Хотите включить его сейчас?",
     "firewall_ufw_disabled": "UFW был отключен.",
     "firewall_iptables_title": "Просмотр правил iptables (только чтение)",
-    "firewall_iptables_readonly": "Управление iptables через этот интерфейс не поддерживается из-за его сложности."
+    "firewall_iptables_readonly": "Управление iptables через этот интерфейс не поддерживается из-за его сложности.",
+
+    "docker_menu_manage_compose": "Управление Docker Compose",
+    "docker_compose_prompt_path": "Введите путь к директории проекта Docker Compose:",
+    "docker_compose_invalid_path": "Неверный путь. Пожалуйста, введите существующую директорию.",
+    "docker_compose_not_found": "Файл docker-compose.yml не найден в {path}",
+    "docker_compose_managing_title": "Управление проектом Compose в: {path}",
+    "docker_compose_menu_up": "Up (запустить службы)",
+    "docker_compose_menu_down": "Down (остановить службы)",
+    "docker_compose_menu_ps": "Статус (ps)",
+    "docker_compose_menu_logs": "Логи",
+    "docker_compose_menu_back": "Назад в меню Docker"
 } 

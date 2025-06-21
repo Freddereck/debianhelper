@@ -2,10 +2,42 @@ import os
 import questionary
 from rich.console import Console
 from rich.panel import Panel
-from app.utils import run_command, is_tool_installed, run_command_live
+from app.utils import run_command, is_tool_installed, run_command_live, run_command_for_output
 from app.translations import t
 
 console = Console()
+
+# --- New Feature Functions ---
+
+def nginx_list_sites():
+    console.print(f"[cyan]{t('nginx_listing_sites')}...[/cyan]")
+    sites_enabled_path = "/etc/nginx/sites-enabled"
+    if os.path.isdir(sites_enabled_path):
+        try:
+            sites = os.listdir(sites_enabled_path)
+            if sites:
+                for site in sites:
+                    console.print(f" - [bold green]{site}[/bold green]")
+            else:
+                console.print(f"[yellow]{t('nginx_no_sites_found')}[/yellow]")
+        except Exception as e:
+            console.print(f"[red]{t('error_listing_sites', error=e)}[/red]")
+    else:
+        console.print(f"[red]{t('nginx_sites_enabled_not_found', path=sites_enabled_path)}[/red]")
+
+def mysql_list_databases():
+    console.print(f"[cyan]{t('mysql_listing_databases')}...[/cyan]")
+    command = "sudo mysql -e 'SHOW DATABASES;'"
+    run_command(command)
+
+def postgresql_list_databases():
+    console.print(f"[cyan]{t('postgresql_listing_databases')}...[/cyan]")
+    command = "sudo -u postgres psql -c '\\l'"
+    run_command(command)
+
+def certbot_list_certificates():
+    console.print(f"[cyan]{t('certbot_listing_certs')}...[/cyan]")
+    run_command("sudo certbot certificates")
 
 # --- Generic Management Functions ---
 
@@ -45,12 +77,13 @@ def manage_nginx():
         console.clear()
         console.print(Panel(f"[bold green]Nginx {t('management')}[/bold green]", border_style="green"))
         action = questionary.select(t('what_to_do'), choices=[
-            t('nginx_menu_status'), t('nginx_menu_test_config'), t('nginx_menu_reload'), 
+            t('nginx_menu_list_sites'), t('nginx_menu_status'), t('nginx_menu_test_config'), t('nginx_menu_reload'), 
             t('nginx_menu_restart'), t('uninstall'), t('back')
         ]).ask()
 
         if action == t('back') or action is None: break
-        if action == t('nginx_menu_status'): service_status('nginx')
+        if action == t('nginx_menu_list_sites'): nginx_list_sites()
+        elif action == t('nginx_menu_status'): service_status('nginx')
         elif action == t('nginx_menu_test_config'): run_command("sudo nginx -t")
         elif action == t('nginx_menu_reload'): service_reload('nginx')
         elif action == t('nginx_menu_restart'): service_restart('nginx')
@@ -62,11 +95,12 @@ def manage_mysql():
         console.clear()
         console.print(Panel(f"[bold yellow]MySQL {t('management')}[/bold yellow]", border_style="yellow"))
         action = questionary.select(t('what_to_do'), choices=[
-            t('mysql_menu_status'), t('mysql_menu_secure'), t('uninstall'), t('back')
+            t('mysql_menu_list_db'), t('mysql_menu_status'), t('mysql_menu_secure'), t('uninstall'), t('back')
         ]).ask()
 
         if action == t('back') or action is None: break
-        if action == t('mysql_menu_status'): service_status('mysql')
+        if action == t('mysql_menu_list_db'): mysql_list_databases()
+        elif action == t('mysql_menu_status'): service_status('mysql')
         elif action == t('mysql_menu_secure'):
             console.print(t('mysql_secure_manual_follow'))
             os.system("sudo mysql_secure_installation")
@@ -79,11 +113,12 @@ def manage_postgresql():
         console.clear()
         console.print(Panel(f"[bold blue]PostgreSQL {t('management')}[/bold blue]", border_style="blue"))
         action = questionary.select(t('what_to_do'), choices=[
-            t('service_status'), t('service_restart'), t('uninstall'), t('back')
+            t('postgresql_menu_list_db'), t('service_status'), t('service_restart'), t('uninstall'), t('back')
         ]).ask()
 
         if action == t('back') or action is None: break
-        if action == t('service_status'): service_status('postgresql')
+        if action == t('postgresql_menu_list_db'): postgresql_list_databases()
+        elif action == t('service_status'): service_status('postgresql')
         elif action == t('service_restart'): service_restart('postgresql')
         elif action == t('uninstall'): service_uninstall('postgresql postgresql-contrib')
         if action != t('back'): questionary.press_any_key_to_continue().ask()
@@ -143,11 +178,12 @@ def manage_certbot():
             break
 
         action = questionary.select(t('what_to_do'), choices=[
-            t('certbot_menu_get_cert'), t('certbot_menu_test_renewal'), t('uninstall'), t('back')
+            t('certbot_menu_list_certs'), t('certbot_menu_get_cert'), t('certbot_menu_test_renewal'), t('uninstall'), t('back')
         ]).ask()
 
         if action == t('back') or action is None: break
-        if action == t('certbot_menu_get_cert'):
+        if action == t('certbot_menu_list_certs'): certbot_list_certificates()
+        elif action == t('certbot_menu_get_cert'):
             console.print(f"[cyan]{t('certbot_get_cert_instructions')}[/cyan]")
             os.system("sudo certbot --nginx")
             questionary.press_any_key_to_continue().ask()
@@ -157,6 +193,47 @@ def manage_certbot():
             questionary.press_any_key_to_continue().ask()
         elif action == t('uninstall'): 
             service_uninstall('certbot python3-certbot-nginx')
+
+def manage_fail2ban():
+    while True:
+        console.clear()
+        console.print(Panel(f"[bold_yellow]Fail2Ban {t('management')}[/bold_yellow]", border_style="yellow"))
+        action = questionary.select(t('what_to_do'), choices=[
+            t('fail2ban_menu_list_jails'),
+            t('fail2ban_menu_unban_ip'),
+            t('service_status'),
+            t('service_restart'),
+            t('uninstall'),
+            t('back')
+        ]).ask()
+
+        if action == t('back') or action is None: break
+        
+        console.clear()
+        if action == t('service_status'):
+            service_status('fail2ban')
+        elif action == t('service_restart'):
+            service_restart('fail2ban')
+        elif action == t('fail2ban_menu_list_jails'):
+            console.print(f"[cyan]{t('fail2ban_listing_jails')}...[/cyan]")
+            run_command("sudo fail2ban-client status")
+        elif action == t('fail2ban_menu_unban_ip'):
+            jail = questionary.text(t('fail2ban_prompt_jail')).ask()
+            if jail:
+                ip_address = questionary.text(t('fail2ban_prompt_ip')).ask()
+                if ip_address:
+                    console.print(f"[yellow]{t('fail2ban_unbanning_ip', ip=ip_address, jail=jail)}[/yellow]")
+                    run_command(f"sudo fail2ban-client set {jail} unbanip {ip_address}")
+        elif action == t('uninstall'):
+            service_uninstall('fail2ban')
+            
+        questionary.press_any_key_to_continue().ask()
+
+def install_nextcloud_wizard(package_name):
+    """A guided wizard for installing Nextcloud."""
+    console.print(Panel(f"[bold blue]{t('nextcloud_wizard_title')}[/bold blue]", border_style="blue"))
+    console.print(t('feature_not_implemented_yet'))
+    questionary.press_any_key_to_continue().ask()
 
 def install_phpmyadmin_managed(package_name):
     console.print(Panel(f"[bold magenta]{t('pma_installer_title')}[/bold magenta]"))
@@ -215,16 +292,59 @@ def manage_3x_ui():
 # --- Main Software Manager ---
 
 SOFTWARE_CATALOG = {
-    "Nginx": {"check": "nginx", "install": service_install, "manage": manage_nginx, "package_name": "nginx"},
-    "Apache2": {"check": "apache2ctl", "install": service_install, "manage": manage_apache, "package_name": "apache2"},
-    "MySQL": {"check": "mysql", "install": service_install, "manage": manage_mysql, "package_name": "mysql-server"},
-    "PostgreSQL": {"check": "psql", "install": service_install, "manage": manage_postgresql, "package_name": "postgresql postgresql-contrib"},
-    "MongoDB": {"check": "mongod", "install": service_install, "manage": manage_mongodb, "package_name": "mongodb"},
-    "Redis": {"check": "redis-server", "install": service_install, "manage": manage_redis, "package_name": "redis-server"},
-    "PHPMyAdmin": {"check": "/usr/share/phpmyadmin", "install": install_phpmyadmin_managed, "manage": manage_phpmyadmin, "package_name": "phpmyadmin"},
-    "Certbot": {"check": "certbot", "install": service_install, "manage": manage_certbot, "package_name": "certbot python3-certbot-nginx"},
-    "3X-UI": {"check": "/usr/local/bin/x-ui", "install": install_3x_ui, "manage": manage_3x_ui, "package_name": "3x-ui"},
-    # More software will be added here
+    "Nginx": {
+        "check": "nginx", "install": service_install, "manage": manage_nginx, "package_name": "nginx",
+        "version_cmd": "nginx -v 2>&1 | grep -o '[0-9.]*$'"
+    },
+    "Apache2": {
+        "check": "apache2ctl", "install": service_install, "manage": manage_apache, "package_name": "apache2",
+        "version_cmd": "apache2 -v | grep 'Server version' | awk -F'/' '{print $2}' | awk '{print $1}'"
+    },
+    "MySQL": {
+        "check": "mysql", "install": service_install, "manage": manage_mysql, "package_name": "mysql-server",
+        "version_cmd": "mysql --version | awk '{print $3}'"
+    },
+    "PostgreSQL": {
+        "check": "psql", "install": service_install, "manage": manage_postgresql, "package_name": "postgresql postgresql-contrib",
+        "version_cmd": "psql --version | awk '{print $3}'"
+    },
+    "MongoDB": {
+        "check": "mongod", "install": service_install, "manage": manage_mongodb, "package_name": "mongodb",
+        "version_cmd": "mongod --version | grep 'db version' | awk '{print $3}' | sed 's/v//'"
+    },
+    "Redis": {
+        "check": "redis-server", "install": service_install, "manage": manage_redis, "package_name": "redis-server",
+        "version_cmd": "redis-server --version | awk '{print $3}' | sed 's/v=//'"
+    },
+    "PHPMyAdmin": {
+        "check": "/usr/share/phpmyadmin", "install": install_phpmyadmin_managed, "manage": manage_phpmyadmin, "package_name": "phpmyadmin",
+        "version_cmd": "dpkg-query -W -f='${Version}' phpmyadmin 2>/dev/null" # Using dpkg for reliable version info
+    },
+    "Certbot": {
+        "check": "certbot", "install": service_install, "manage": manage_certbot, "package_name": "certbot python3-certbot-nginx",
+        "version_cmd": "certbot --version | awk '{print $2}'"
+    },
+    "Fail2ban": {
+        "check": "fail2ban-client", "install": service_install, "manage": manage_fail2ban, "package_name": "fail2ban",
+        "version_cmd": "fail2ban-client --version | awk '{print $1}'"
+    },
+    "Docker Compose": {
+        "check": "docker-compose", "install": service_install, "manage": None, # Managed via Docker module
+        "package_name": "docker-compose",
+        "version_cmd": "docker-compose --version | awk '{print $3}' | sed 's/,$//'"
+    },
+    "Nextcloud": {
+        "check": "/var/www/html/nextcloud/version.php", "install": install_nextcloud_wizard, "manage": None, # Managed via web UI
+        "package_name": "nextcloud",
+        "version_cmd": None
+    },
+    "3X-UI": {
+        "check": "/usr/local/x-ui/x-ui",
+        "install": install_3x_ui,
+        "manage": manage_3x_ui,
+        "package_name": "3x-ui",
+        "version_cmd": "/usr/local/x-ui/x-ui version 2>/dev/null"
+    }
 }
 
 def show_software_manager():
@@ -234,6 +354,8 @@ def show_software_manager():
         console.print(Panel(f"[bold blue]{t('software_manager_title')}[/bold blue]", border_style="blue"))
         
         choices = []
+        raw_choices_map = {} # To map styled string back to simple name
+        
         for name, software in SOFTWARE_CATALOG.items():
             check_path = software["check"]
             # Check if it's a path or a command
@@ -243,23 +365,37 @@ def show_software_manager():
                 installed = is_tool_installed(check_path)
             
             if installed:
-                choices.append(f"{t('manage')} {name}")
+                version_str = ""
+                if software.get("version_cmd"):
+                    version = run_command_for_output(software["version_cmd"])
+                    if version:
+                        version_str = f" (v{version.strip()})"
+                
+                display_text = f"[{t('manage')}] {name}{version_str}"
+                choices.append(display_text)
+                raw_choices_map[display_text] = f"manage {name}"
             else:
-                choices.append(f"{t('install')} {name}")
+                display_text = f"[{t('install')}] {name}"
+                choices.append(display_text)
+                raw_choices_map[display_text] = f"install {name}"
         
         choices.append(t('back'))
         
-        action = questionary.select(t('software_manager_prompt'), choices=choices).ask()
+        action_display = questionary.select(t('software_manager_prompt'), choices=choices).ask()
 
-        if action is None or action == t('back'):
+        if action_display is None or action_display == t('back'):
             break
+
+        action = raw_choices_map.get(action_display)
+        if not action:
+            continue
 
         # Find which software was selected
         verb, software_name = action.split(" ", 1)
         software = SOFTWARE_CATALOG.get(software_name)
 
         if software:
-            if verb == t('install'):
+            if verb == 'install':
                 software['install'](software['package_name'])
-            elif verb == t('manage'):
+            elif verb == 'manage':
                 software['manage']() 

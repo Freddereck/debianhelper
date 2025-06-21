@@ -11,6 +11,7 @@ import os
 import json
 
 from app.translations import t
+from app.utils import run_command # Import run_command
 
 console = Console()
 client = None
@@ -103,6 +104,58 @@ def container_actions(container):
             console.print(f"[bold red]{t('docker_error_api', error=e)}[/bold red]")
             questionary.press_any_key(t('docker_press_enter')).ask()
 
+def run_compose_command(project_path, command):
+    """Runs a docker-compose command in a specific directory."""
+    if not os.path.exists(os.path.join(project_path, 'docker-compose.yml')):
+        console.print(f"[red]{t('docker_compose_not_found', path=project_path)}[/red]")
+        return
+    
+    # Use -d for up to run in background
+    if command == "up":
+        command = "up -d"
+        
+    full_cmd = f"cd {project_path} && docker-compose {command}"
+    console.print(f"[cyan]Running: {full_cmd}[/cyan]")
+    run_command(full_cmd)
+
+def manage_docker_compose():
+    """Manages Docker Compose projects."""
+    project_path = questionary.path(t('docker_compose_prompt_path')).ask()
+    
+    if not project_path or not os.path.isdir(project_path):
+        console.print(f"[red]{t('docker_compose_invalid_path')}[/red]")
+        questionary.press_any_key_to_continue().ask()
+        return
+        
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        console.print(Panel(t('docker_compose_managing_title', path=project_path), border_style="magenta"))
+        
+        choices = [
+            t('docker_compose_menu_up'),
+            t('docker_compose_menu_down'),
+            t('docker_compose_menu_ps'),
+            t('docker_compose_menu_logs'),
+            t('docker_compose_menu_back')
+        ]
+        action = questionary.select(t('what_to_do'), choices=choices).ask()
+
+        if action is None or action == t('docker_compose_menu_back'):
+            break
+
+        console.clear()
+        if action == t('docker_compose_menu_up'):
+            run_compose_command(project_path, "up")
+        elif action == t('docker_compose_menu_down'):
+            run_compose_command(project_path, "down")
+        elif action == t('docker_compose_menu_ps'):
+            run_compose_command(project_path, "ps")
+        elif action == t('docker_compose_menu_logs'):
+            run_compose_command(project_path, "logs")
+        
+        if action != t('docker_compose_menu_back'):
+            questionary.press_any_key_to_continue().ask()
+
 def manage_all_containers():
     """Menu to list and manage all containers."""
     while True:
@@ -146,6 +199,7 @@ def show_docker_manager():
         choices = [
             # t('docker_menu_stats'), # Live stats is complex, stub for now
             t('docker_menu_manage_containers'),
+            t('docker_menu_manage_compose'),
             t('docker_menu_manage_images'),
             # t('docker_menu_manage_volumes'), # Stub
             # t('docker_menu_manage_networks'), # Stub
@@ -158,6 +212,8 @@ def show_docker_manager():
             break
         elif choice == t('docker_menu_manage_containers'):
             manage_all_containers()
+        elif choice == t('docker_menu_manage_compose'):
+            manage_docker_compose()
         elif choice == t('docker_menu_manage_images'):
             manage_images(get_docker_client())
         elif choice == t('docker_menu_prune'):
