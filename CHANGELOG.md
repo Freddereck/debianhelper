@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.4] - 2025-06-24
+
+### Fixed
+- **Localization**: Added missing Russian and English translations for the Webmin management feature and for common service control actions and statuses.
+
 ## [2.2.3] - 2025-06-24
 
 ### Added
