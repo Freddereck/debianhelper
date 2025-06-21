@@ -1,80 +1,107 @@
 import os
 import getpass
-import time
 import questionary
-from crontab import CronTab
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
+from crontab import CronTab
+from app.translations import t
 
 console = Console()
 
-def show_cron_manager():
-    """Manages user-specific cron jobs."""
-    if os.name == 'nt':
-        console.print("[yellow]Cron is not available on Windows.[/yellow]")
-        time.sleep(2)
-        return
-        
+def get_cron():
+    """Gets the CronTab for the current user, handling permissions."""
     try:
-        # FIX: Use user=True which is a more robust way to get current user's crontab
-        cron = CronTab(user=True)
-    except (IOError, FileNotFoundError):
-        console.print("[red]Could not open crontab. Is cron installed and have you used it before?[/red]")
-        time.sleep(3)
+        # True means use sudo to access system-wide crontab if needed
+        return CronTab(user=True)
+    except IOError:
+        console.print(f"[bold red]{t('cron_error_permission')}[/bold red]")
+        return None
+
+def list_jobs(cron):
+    """Lists all cron jobs for the user."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+    user = getpass.getuser()
+    console.print(Panel(t('cron_current_jobs', user=user)))
+    
+    if len(cron) == 0:
+        console.print(t('cron_no_jobs'))
+        return
+
+    table = Table()
+    table.add_column(t('cron_col_schedule'), style="cyan")
+    table.add_column(t('cron_col_command'), style="magenta")
+    table.add_column(t('cron_col_comment'), style="green")
+
+    for job in cron:
+        table.add_row(str(job.slices), job.command, job.comment)
+    
+    console.print(table)
+
+def add_job(cron):
+    """Adds a new cron job."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+    console.print(Panel(t('cron_add_title')))
+    
+    command = questionary.text(t('cron_add_prompt_command')).ask()
+    schedule = questionary.text(t('cron_add_prompt_schedule')).ask()
+    comment = questionary.text(t('cron_add_prompt_comment')).ask()
+
+    if command and schedule:
+        job = cron.new(command=command, comment=comment)
+        job.setall(schedule)
+        cron.write()
+        console.print(f"[green]{t('cron_add_success')}[/green]")
+
+def remove_job(cron):
+    """Removes a cron job."""
+    if len(cron) == 0:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        console.print(t('cron_no_jobs'))
+        return
+
+    job_choices = {f"{job.slices} - {job.command} ({job.comment})": job for job in cron}
+    
+    selected_job_str = questionary.select(
+        t('cron_remove_prompt'),
+        choices=list(job_choices.keys())
+    ).ask()
+
+    if selected_job_str and questionary.confirm(t('cron_remove_confirm')).ask():
+        job_to_remove = job_choices[selected_job_str]
+        cron.remove(job_to_remove)
+        cron.write()
+        console.print(f"[green]{t('cron_remove_success')}[/green]")
+
+def show_cron_manager():
+    """Main function for the cron job manager."""
+    cron = get_cron()
+    if not cron:
+        questionary.press_any_key_to_continue().ask()
         return
 
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
-        console.print(Panel("[bold cyan]Cron Job Manager[/bold cyan]"))
-        jobs = list(cron)
-        job_choices = [f"[{'✅' if job.is_enabled() else '❌'}] {job}" for job in jobs]
+        console.print(Panel(f"[bold blue]{t('cron_title')}[/bold blue]"))
         
-        action = questionary.select(
-            "Select a job to manage or an action:",
-            choices=job_choices + ["Add New Job", "Back"],
-            pointer="👉"
+        choice = questionary.select(
+            t('cron_prompt_action'),
+            choices=[
+                t('cron_menu_list'),
+                t('cron_menu_add'),
+                t('cron_menu_remove'),
+                t('cron_menu_back')
+            ]
         ).ask()
 
-        if action == "Back" or action is None:
-            break
-        elif action == "Add New Job":
-            command = questionary.text("Enter command for the new job:").ask()
-            if not command: continue
-            schedule = questionary.text("Enter schedule (e.g., '*/5 * * * *'):").ask()
-            if not schedule: continue
-            
-            new_job = cron.new(command=command)
-            if new_job.setall(schedule):
-                cron.write()
-                console.print(f"[green]Job '{command}' added.[/green]")
-            else:
-                console.print("[red]Invalid schedule format.[/red]")
-            time.sleep(1)
-        else:
-            job_index = job_choices.index(action)
-            job = jobs[job_index]
-            job_action = questionary.select(
-                f"Action for job: {job}",
-                choices=["Enable/Disable", "Delete", "Edit Command", "Edit Schedule", "Cancel"],
-                pointer="👉"
-            ).ask()
-            
-            if job_action == "Cancel":
-                continue
-
-            if job_action == "Enable/Disable":
-                job.enable(not job.is_enabled())
-            elif job_action == "Delete":
-                cron.remove(job)
-            elif job_action == "Edit Command":
-                job.command = questionary.text("New command:", default=job.command).ask()
-            elif job_action == "Edit Schedule":
-                new_schedule = questionary.text("New schedule:", default=str(job.slices)).ask()
-                if not job.setall(new_schedule):
-                    console.print("[red]Invalid schedule format. No changes made.[/red]")
-                    time.sleep(2)
-                    continue
-            
-            cron.write()
-            console.print("[green]Crontab updated.[/green]")
-            time.sleep(1) 
+        if choice == t('cron_menu_list'):
+            list_jobs(cron)
+            questionary.press_any_key_to_continue().ask()
+        elif choice == t('cron_menu_add'):
+            add_job(cron)
+            questionary.press_any_key_to_continue().ask()
+        elif choice == t('cron_menu_remove'):
+            remove_job(cron)
+            questionary.press_any_key_to_continue().ask()
+        elif choice == t('cron_menu_back') or choice is None:
+            break 

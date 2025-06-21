@@ -2,74 +2,83 @@ import os
 import questionary
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
-
+from app.translations import t
 from app.utils import run_command, run_command_live
+from app.modules.firewall import run_command_for_output # Reusing this handy function
 
 console = Console()
 
-def check_common_utilities():
-    """Checks for the presence and version of common command-line tools."""
-    console.print(Panel("[bold green]Checking for Common Utilities[/bold green]"))
-    utilities = ["python3", "git", "node", "docker"]
-    table = Table(title="Utility Status")
-    table.add_column("Utility", style="cyan")
-    table.add_column("Version / Status", style="magenta")
-
-    for util in utilities:
-        version = run_command(f"{util} --version")
-        if version:
-            table.add_row(util, version)
-        else:
-            table.add_row(util, "[red]Not Found[/red]")
-    
-    console.print(table)
+def update_package_lists():
+    """Runs apt update."""
+    console.print(f"[yellow]{t('packages_update_running')}[/yellow]")
+    return_code = run_command("sudo apt-get update", show_output=True, ignore_errors=True)
+    if return_code == 0:
+        console.print(f"[green]{t('packages_update_success')}[/green]")
+    else:
+        console.print(f"[red]{t('packages_update_error')}[/red]")
     questionary.press_any_key_to_continue().ask()
 
+def upgrade_packages():
+    """Runs apt upgrade."""
+    if questionary.confirm(t('packages_upgrade_confirm')).ask():
+        console.print(f"[yellow]{t('packages_upgrade_running')}[/yellow]")
+        console.print(f"[dim]{t('packages_upgrade_log')}[/dim]")
+        # Using run_command_live for better user experience
+        return_code = run_command_live("sudo apt-get upgrade -y", "apt_upgrade.log")
+        if return_code == 0:
+            console.print(f"[green]{t('packages_upgrade_success')}[/green]")
+        else:
+            console.print(f"[red]{t('packages_upgrade_error')}[/red]")
+    questionary.press_any_key_to_continue().ask()
+
+def autoremove_packages():
+    """Runs apt autoremove."""
+    if questionary.confirm(t('packages_autoremove_confirm')).ask():
+        console.print(f"[yellow]{t('packages_autoremove_running')}[/yellow]")
+        return_code = run_command("sudo apt-get autoremove -y", show_output=True, ignore_errors=True)
+        if return_code == 0:
+            console.print(f"[green]{t('packages_autoremove_success')}[/green]")
+        else:
+            console.print(f"[red]{t('packages_autoremove_error')}[/red]")
+    questionary.press_any_key_to_continue().ask()
+
+def list_all_packages():
+    """Lists all installed packages with their versions."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+    with console.status(t('packages_list_running')):
+        package_list = run_command_for_output("dpkg-query -W -f='${Package;-30}\t${Version}\\n'")
+    
+    if package_list:
+        console.print(Panel(package_list, title=t('packages_list_title'), border_style="green", expand=False))
+    else:
+        console.print(f"[red]{t('packages_list_error')}[/red]")
+    
+    questionary.press_any_key_to_continue().ask()
 
 def show_package_manager():
-    """Provides a simple interface for APT package management."""
-    os.system('cls' if os.name == 'nt' else 'clear')
-    console.print(Panel("[bold blue]Package Manager (APT)[/bold blue]"))
+    """Main menu for the APT package manager."""
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        console.print(Panel(f"[bold blue]{t('packages_title')}[/bold blue]"))
 
-    # This check is for Windows compatibility, not for apt specifically
-    if os.name == 'nt':
-        console.print("[red]APT package manager is not available on Windows.[/red]")
-        questionary.press_any_key_to_continue().ask()
-        return
+        choice = questionary.select(
+            t('packages_prompt_action'),
+            choices=[
+                t('packages_menu_update'),
+                t('packages_menu_upgrade'),
+                t('packages_menu_list'),
+                t('packages_menu_autoremove'),
+                t('packages_menu_back'),
+            ]
+        ).ask()
 
-    action = questionary.select("Select an action:",
-                                 choices=["Update package lists (update)",
-                                          "Upgrade all packages (upgrade)",
-                                          "Install a package",
-                                          "Remove a package",
-                                          "Check for common utilities",
-                                          "Back"]).ask()
-
-    if action is None or action == "Back":
-        return
-
-    if "update" in action:
-        run_command_live("sudo apt-get update", "apt_update.log")
-    elif "upgrade" in action:
-        run_command_live("sudo apt-get upgrade -y", "apt_upgrade.log")
-    elif "Install" in action:
-        package = questionary.text("Enter name of package to install:").ask()
-        if package:
-            run_command_live(f"sudo apt-get install -y {package}", f"apt_install_{package}.log")
-    elif "Remove" in action:
-        package = questionary.text("Enter name of package to remove:").ask()
-        if package:
-            if questionary.confirm(f"Also remove dependencies and config files for {package}? (purge)").ask():
-                run_command_live(f"sudo apt-get purge -y {package}", f"apt_purge_{package}.log")
-            else:
-                run_command_live(f"sudo apt-get remove -y {package}", f"apt_remove_{package}.log")
-    elif "Check" in action:
-        check_common_utilities()
-        # We call the main function again to show the menu after the check
-        show_package_manager()
-        return # Important to exit after the recursive call
-
-    questionary.press_any_key_to_continue().ask()
-    # Rerun the manager to show menu again after an action
-    show_package_manager() 
+        if choice == t('packages_menu_update'):
+            update_package_lists()
+        elif choice == t('packages_menu_upgrade'):
+            upgrade_packages()
+        elif choice == t('packages_menu_list'):
+            list_all_packages()
+        elif choice == t('packages_menu_autoremove'):
+            autoremove_packages()
+        elif choice == t('packages_menu_back') or choice is None:
+            break 

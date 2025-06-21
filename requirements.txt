@@ -3,3 +3,4 @@ questionary
 psutil
 python-crontab
 docker
+packaging

@@ -1,73 +1,85 @@
 import os
+import time
 import questionary
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-import re
 
 from app.utils import run_command, run_command_live
+from app.translations import t
 
 console = Console()
 
-def run_system_health_check():
-    """Runs a series of checks and maintenance tasks."""
-    os.system('cls' if os.name == 'nt' else 'clear')
-    console.print(Panel("[bold cyan]Server Health Check & Maintenance[/bold cyan]"))
+def check_updates():
+    """Checks for available package updates and offers to install them."""
+    console.print(f"[yellow]{t('health_checking_updates')}[/yellow]")
     
-    if os.name != 'nt' and os.geteuid() != 0:
-        console.print("[bold red]Health check requires sudo privileges.[/bold red]")
-        questionary.press_any_key_to_continue().ask()
+    # Update package list first quietly
+    run_command("sudo apt-get update -qq")
+    
+    # Get list of upgradable packages
+    upgradable_raw = run_command("apt list --upgradable 2>/dev/null | tail -n +2")
+    
+    if not upgradable_raw:
+        console.print(f"[green]{t('health_no_updates')}[/green]")
         return
-
-    # 1. Check for updates
-    console.print("\n[yellow]1. Checking for system updates...[/yellow]")
-    if run_command("sudo apt-get update -qq", timeout=120) is None:
-        console.print("[red]Failed to check for updates (command timed out or failed). Skipping.[/red]")
-    else:
-        upgradable_raw = run_command("apt list --upgradable")
-        if upgradable_raw:
-            upgradable_lines = upgradable_raw.strip().split('\n')
-            num_upgradable = len(upgradable_lines) - 1
-            if num_upgradable > 0:
-                console.print(f"[bold yellow]Found {num_upgradable} packages to upgrade.[/bold yellow]")
-                if questionary.confirm("Do you want to see the list of packages?").ask():
-                    package_table = Table(title="Upgradable Packages")
-                    package_table.add_column("Package", style="cyan"); package_table.add_column("New Version", style="magenta"); package_table.add_column("Current Version", style="green")
-                    for line in upgradable_lines[1:]:
-                        parts = line.split(); pkg_name = parts[0].split('/')[0]; new_version = parts[1]; current_version = parts[3] if len(parts) > 3 else "N/A"
-                        package_table.add_row(pkg_name, new_version, current_version)
-                    console.print(package_table)
-                if questionary.confirm("Do you want to upgrade them now?").ask():
-                    run_command_live("sudo apt-get upgrade -y", "upgrade_log.log")
-            else: console.print("[green]System is up-to-date.[/green]")
-        else: console.print("[green]System is up-to-date.[/green]")
-
-    # 2. Clean system
-    if questionary.confirm("\nClean unnecessary packages (autoremove & clean)?").ask():
-        run_command_live("sudo apt-get autoremove -y && sudo apt-get clean", "cleanup_log.log")
-
-    # 3. Check dmesg for errors
-    console.print("\n[yellow]3. Checking for kernel/driver errors (dmesg)...[/yellow]")
-    dmesg_errors = run_command("sudo dmesg -l err,crit,alert,emerg")
-    if dmesg_errors:
-        console.print("[bold red]Found critical errors in dmesg log:[/bold red]")
-        console.print(Panel(dmesg_errors, border_style="red", title="dmesg Critical Errors"))
-
-        # Add specific check for I/O errors
-        io_errors = re.findall(r'.*I/O error.*', dmesg_errors)
-        if io_errors:
-            console.print("[bold red]Specifically found disk I/O errors, consider checking disk health (smartctl).[/bold red]")
-    else:
-        console.print("[green]No critical kernel errors found in dmesg.[/green]")
         
-    # 4. Check status of key services
-    console.print("\n[yellow]4. Checking status of key services...[/yellow]")
-    services_to_check = ["sshd", "cron", "nginx", "docker", "fail2ban", "ufw"]
-    table = Table(title="Service Status"); table.add_column("Service", style="cyan"); table.add_column("Status", style="magenta")
-    for service in services_to_check:
-        status = "[green]● Active[/green]" if run_command(f"systemctl is-active {service}") == "active" else "[red]○ Inactive/Not Found[/red]"
-        table.add_row(service, status)
+    upgradable_packages = upgradable_raw.strip().split('\n')
+    package_count = len(upgradable_packages)
+
+    console.print(f"[bold cyan]{t('health_updates_found', count=package_count)}[/bold cyan]")
+    
+    table = Table(title=t('health_updates_list'))
+    table.add_column("Package", style="cyan")
+    table.add_column("Current Version", style="magenta")
+    table.add_column("New Version", style="green")
+
+    for pkg in upgradable_packages:
+        parts = pkg.split()
+        table.add_row(parts[0], parts[3], parts[1])
+        
     console.print(table)
     
-    console.print("\n[bold green]Health check complete![/bold green]")
-    questionary.press_any_key_to_continue().ask() 
+    if questionary.confirm(t('health_prompt_upgrade')).ask():
+        console.print(f"\n[yellow]{t('health_starting_upgrade')}[/yellow]")
+        run_command_live("sudo apt-get upgrade -y", "apt_upgrade.log")
+        console.print(f"[bold green]{t('health_upgrade_complete')}[/bold green]")
+
+def perform_cleanup():
+    """Performs system cleanup by running autoremove and clean."""
+    if not questionary.confirm(t('health_cleanup_prompt')).ask():
+        return
+
+    console.print(f"\n[yellow]{t('health_running_autoremove')}[/yellow]")
+    run_command_live("sudo apt-get autoremove -y", "apt_autoremove.log")
+    
+    console.print(f"\n[yellow]{t('health_running_clean')}[/yellow]")
+    run_command_live("sudo apt-get clean", "apt_clean.log")
+    
+    console.print(f"\n[bold green]{t('health_cleanup_finished')}[/bold green]")
+
+def run_system_health_check():
+    """Main menu for the system health check module."""
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        console.print(Panel(f"[bold green]{t('health_title')}[/bold green]"))
+        
+        choice = questionary.select(
+            t('main_prompt'),
+            choices=[
+                t('health_menu_check_updates'),
+                t('health_menu_cleanup'),
+                t('health_menu_back')
+            ]
+        ).ask()
+
+        if choice == t('health_menu_check_updates'):
+            check_updates()
+            console.print(f"\n[cyan]{t('health_press_enter')}[/cyan]")
+            input()
+        elif choice == t('health_menu_cleanup'):
+            perform_cleanup()
+            console.print(f"\n[cyan]{t('health_press_enter')}[/cyan]")
+            input()
+        elif choice == t('health_menu_back') or choice is None:
+            break 
