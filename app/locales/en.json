@@ -325,6 +325,9 @@
     "updater_up_to_date": "You are on the latest version.",
     "updater_version_comparison": "Your version: {local} | Latest version: {remote}",
     "updater_restart_required": "Update complete. Please restart the panel to apply changes.",
+    "updater_checking": "Checking for updates...",
+    "updater_remote_error": "Could not get remote version info. Please check your internet connection.",
+    "updater_local_error": "Could not determine local version. Project files may be corrupt.",
 
     "monitor_title": "System Monitor (htop)",
     "monitor_htop_not_found": "htop is not found. Please install it.",

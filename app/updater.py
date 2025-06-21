@@ -9,23 +9,19 @@ from rich.markdown import Markdown
 from app.translations import t
 
 # GitHub repository details
-GITHUB_REPO_URL = "https://github.com/debianhelper/server-panel" # Replace with your actual repo URL if different
-RAW_CONTENT_URL = "https://raw.githubusercontent.com/debianhelper/server-panel/main" # Replace if different
+GITHUB_REPO = "debianhelper/server-panel"
 
 console = Console()
 
-def get_remote_version():
-    """Fetches the version from the remote server_panel.py file."""
+def get_latest_release_info():
+    """Fetches the latest release information from the GitHub API."""
     try:
-        url = f"{RAW_CONTENT_URL}/server_panel.py"
-        response = requests.get(url, timeout=5)
+        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        response = requests.get(api_url, timeout=5)
         response.raise_for_status()
-        match = re.search(r"__version__\s*=\s*['\"](.+?)['\"]", response.text)
-        if match:
-            return match.group(1)
-    except (requests.RequestException, re.error):
+        return response.json()
+    except requests.RequestException:
         return None
-    return None
 
 def get_local_version():
     """Reads the version from the local server_panel.py file."""
@@ -39,39 +35,43 @@ def get_local_version():
         return None
     return None
 
-def get_changelog():
-    """Fetches the CHANGELOG.md file from GitHub."""
-    try:
-        url = f"{RAW_CONTENT_URL}/CHANGELOG.md"
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        return response.text
-    except requests.RequestException:
-        return None
-
 def check_for_updates(on_startup=False):
     """Checks for updates and prompts the user if a new version is available."""
-    local_v = get_local_version()
-    remote_v = get_remote_version()
+    if not on_startup:
+        console.print(f"[cyan]{t('updater_checking')}[/cyan]")
 
-    if not local_v or not remote_v:
-        return # Cannot compare versions
-    
+    release_info = get_latest_release_info()
+
+    # Handle case where remote version check fails
+    if not release_info:
+        if not on_startup:
+            console.print(Panel(f"[bold red]{t('updater_remote_error')}[/bold red]", title="[bold red]Error[/bold red]"))
+            questionary.press_any_key_to_continue().ask()
+        return  # Silently fail on startup, show error on manual check
+
+    remote_v_tag = release_info.get("tag_name", "0.0.0")
+    remote_v = remote_v_tag.lstrip('v') # Remove 'v' prefix if it exists
+    changelog = release_info.get("body", t('updater_changelog_error'))
+
+    local_v = get_local_version()
+
+    # Handle case where local version can't be read (less likely)
+    if not local_v:
+        console.print(Panel(f"[bold red]{t('updater_local_error')}[/bold red]", title="[bold red]Error[/bold red]"))
+        questionary.press_any_key_to_continue().ask()
+        return
+
     is_update_available = version.parse(local_v) < version.parse(remote_v)
 
     if not is_update_available and on_startup:
-        return # Silently return on startup if no update is available
+        return  # Silently return on startup if no update is available
 
     console.print(Panel(t('updater_version_comparison', local=local_v, remote=remote_v), style="bold yellow"))
 
     if is_update_available:
         console.print(Panel(t('updater_new_version_found', version=remote_v), style="bold green"))
         
-        changelog = get_changelog()
-        if changelog:
-            console.print(Panel(Markdown(changelog), title=t('updater_changelog_title'), border_style="cyan"))
-        else:
-            console.print(f"[yellow]{t('updater_changelog_error')}[/yellow]")
+        console.print(Panel(Markdown(changelog), title=t('updater_changelog_title'), border_style="cyan"))
 
         if questionary.confirm(t('updater_prompt_update')).ask():
             console.print(f"[yellow]{t('updater_running_pull')}[/yellow]")
