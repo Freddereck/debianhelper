@@ -1,7 +1,0 @@
-Executing command: sudo lynis audit system --quiet
-==================================================
-
-  [30;43m[WARNING][0m: Test CRYP-7902 had a long execution: 10.604487 seconds[0m
-
-pgrep: pattern that searches for process name longer than 15 characters will result in zero matches
-Try `pgrep -f' option to match against the complete command line.
