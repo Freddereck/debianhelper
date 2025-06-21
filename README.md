@@ -29,7 +29,7 @@
 1.  **Сначала скачай это всё:**
     ```bash
     git clone https://github.com/Freddereck/debianhelper
-    cd ВАШ_РЕПОЗИТОРИЙ
+    cd debianhelper
     ```
 
 2.  **Поставь зависимости:**
