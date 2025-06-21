@@ -300,5 +300,22 @@
 
     "services_wireguard_status": "WireGuard Status",
     "services_wireguard_not_found": "WireGuard does not appear to be installed ('wg' command not found).",
-    "services_wireguard_error": "Could not get WireGuard status."
+    "services_wireguard_error": "Could not get WireGuard status.",
+
+    "wg_manage_title": "Manage WireGuard",
+    "wg_menu_add_client": "Add New Client",
+    "wg_menu_remove_client": "Remove Client",
+    "wg_prompt_select_interface": "Select WireGuard interface to manage:",
+    "wg_error_no_interfaces": "No WireGuard interfaces found in /etc/wireguard.",
+    "wg_prompt_client_name": "Enter a name for the new client (no spaces, e.g., 'phone-alex'):",
+    "wg_error_client_exists": "A client with this name already exists.",
+    "wg_generating_keys": "Generating client keys...",
+    "wg_client_added_title": "Client Added Successfully!",
+    "wg_client_config_title": "Client Configuration",
+    "wg_client_qr_code_title": "Scan QR Code",
+    "wg_client_config_path": "Client config file saved to: {path}",
+    "wg_prompt_remove_client": "Select a client to remove:",
+    "wg_error_no_clients": "No clients found for this interface.",
+    "wg_remove_confirm": "Are you sure you want to remove client {client_name}?",
+    "wg_client_removed": "Client {client_name} and their config have been removed."
 } 

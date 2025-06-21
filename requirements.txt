@@ -4,3 +4,4 @@ psutil
 python-crontab
 docker
 packaging
+qrcode[pil]
