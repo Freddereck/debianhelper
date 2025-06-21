@@ -19,9 +19,11 @@ from app.modules.firewall import show_firewall_manager
 from app.modules.users import show_user_manager
 from app.modules.network import show_network_toolkit
 from app.modules.pm2 import show_pm2_manager
+from app.modules.software_manager import show_software_manager
+from app.utils import is_tool_installed
 
 # Version of the application
-__version__ = "2.2"
+__version__ = "2.2.1"
 
 console = Console()
 
@@ -33,6 +35,7 @@ def main_menu():
         t('menu_health_check'): run_system_health_check,
         t('menu_service_manager'): show_service_manager,
         t('menu_docker_manager'): show_docker_manager,
+        t('menu_software_manager'): show_software_manager,
         t('menu_monitor'): show_htop_monitor,
         t('menu_security_audit'): run_security_audit,
         t('menu_dev_tools'): show_dev_manager,
@@ -42,10 +45,15 @@ def main_menu():
         t('menu_firewall_manager'): show_firewall_manager,
         t('menu_user_manager'): show_user_manager,
         t('menu_network_info'): show_network_toolkit,
-        t('menu_pm2_manager'): show_pm2_manager,
-        t('menu_check_updates'): lambda: check_for_updates(on_startup=False),
-        t('menu_exit'): "exit"
     }
+
+    # Conditionally add PM2 manager if installed
+    if is_tool_installed('pm2'):
+        menu_options[t('menu_pm2_manager')] = show_pm2_manager
+
+    # Add remaining options
+    menu_options[t('menu_check_updates')] = lambda: check_for_updates(on_startup=False)
+    menu_options[t('menu_exit')] = "exit"
     
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')

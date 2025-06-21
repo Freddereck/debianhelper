@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.1] - 2025-06-22
+
+### Added
+- **Major Feature: Software Manager**: A new centralized module (`app/modules/software_manager.py`) for installing and managing various services. The menu dynamically shows "Install" or "Manage" based on the software's installation status.
+- **Nginx & Apache2**: Added full management support (status, restart, reload, config test, uninstall).
+- **Databases**: Added management for **MySQL**, **PostgreSQL**, and **MongoDB**.
+- **In-Memory Store**: Added management for **Redis**.
+- **Custom Installers**:
+    - **3X-UI**: Added a custom installer and manager for the 3X-UI panel.
+    - **PHPMyAdmin**: Added a guided installer with dependency checks.
+    - **Certbot (Let's Encrypt)**: Added an installer and manager to obtain SSL certificates using the Nginx plugin.
+- **Utilities**: Added a universal `is_tool_installed` function in `app/utils.py` and improved installation checks to support both PATH commands and direct file paths.
+- **Localization**: Added dozens of new translation keys in `ru.json` and `en.json` to support all new features.
+
+### Changed
+- **Main Menu**: The menu now features a "Software Manager" entry, consolidating all service management.
+- **PM2 Manager**: The menu item for the PM2 manager is now conditional and only appears if PM2 is actually installed.
+- **Code Structure**:
+    - The old `app/modules/web_server.py` has been removed.
+    - Logic for MySQL and PHPMyAdmin has been migrated from `dev_tools.py` to the new `software_manager.py`.
+    - The `dev_tools.py` module is now leaner, containing only the Java installer.
+
+### Fixed
+- **Missing functionality**: Re-implemented the lost "MySQL Manager" functionality and greatly expanded it.
+
 ## [2.1.4] - 2025-06-21
 
 ### Added

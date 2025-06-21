@@ -116,29 +116,45 @@ def show_user_manager():
         os.system('cls' if os.name == 'nt' else 'clear')
         console.print(Panel(t('user_manager_title'), style="bold blue"))
         
+        users = get_system_users()
+        user_map = {user.pw_name: user for user in users}
+
         choices = [
-            t('user_menu_list'),
+            t('user_menu_list_users'),
+            t('user_menu_add_user')
         ]
         if users:
-            choices.extend([questionary.Separator(), "Delete Existing User"])
-        choices.extend([questionary.Separator(), "Back to Main Menu"])
+            choices.append(t('user_menu_delete_user'))
+        
+        choices.append(t('services_menu_back'))
         
         action = questionary.select(
-            "What would you like to do?",
+            t('user_action_prompt'),
             choices=choices,
             pointer="👉"
         ).ask()
 
-        if action is None or action == "Back to Main Menu":
+        if action == t('services_menu_back') or action is None:
             break
-        elif action == "Add New User":
+        elif action == t('user_menu_list_users'):
+            # The list is already part of the menu display logic, 
+            # but we can show a more detailed table.
+            table = Table(title=t('user_table_title'))
+            table.add_column("Username", style="cyan")
+            table.add_column("UID", style="magenta")
+            table.add_column("Home Directory", style="green")
+            table.add_column("Shell", style="blue")
+            for user in users:
+                table.add_row(user.pw_name, str(user.pw_uid), user.pw_dir, user.pw_shell)
+            console.print(table)
+            questionary.press_any_key_to_continue().ask()
+        elif action == t('user_menu_add_user'):
             add_user()
-        elif action == "Delete Existing User":
-            if not users:
-                continue # Should not happen due to choice logic but good for safety
+        elif action == t('user_menu_delete_user'):
+            if not users: continue
             
             user_to_delete_name = questionary.select(
-                "Which user do you want to delete?",
+                t('user_delete_prompt'),
                 choices=list(user_map.keys())
             ).ask()
             

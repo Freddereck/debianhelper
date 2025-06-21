@@ -3,6 +3,7 @@ import re
 import subprocess
 import time
 from datetime import timedelta
+import shutil
 
 import psutil
 from rich.console import Console
@@ -71,6 +72,10 @@ def run_command_live(command, log_filename):
         except Exception as e:
             console.print(f"\n[bold red]Failed to execute command: {e}[/bold red]")
             return None
+
+def is_tool_installed(name):
+    """Check whether `name` is on PATH and marked as executable."""
+    return shutil.which(name) is not None
 
 def get_uptime():
     """Returns the system uptime."""
