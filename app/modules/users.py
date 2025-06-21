@@ -111,35 +111,13 @@ def delete_user(user_to_delete):
 
 def show_user_manager():
     """Main function for the User Manager."""
-    # This module is not compatible with Windows
-    if os.name == 'nt':
-        console.print(Panel("[bold yellow]User management is not available on Windows.[/bold yellow]", title="Warning"))
-        questionary.press_any_key_to_continue().ask()
-        return
-
     while True:
-        console.clear()
-        users = get_system_users()
-
-        table = Table(title="System Users (UID >= 1000)", border_style="cyan")
-        table.add_column("Username", style="cyan")
-        table.add_column("UID", style="magenta")
-        table.add_column("GID", style="yellow")
-        table.add_column("Home Directory", style="green")
-        table.add_column("Shell", style="blue")
-
-        for user in users:
-            table.add_row(
-                user.pw_name,
-                str(user.pw_uid),
-                str(user.pw_gid),
-                user.pw_dir,
-                user.pw_shell
-            )
-        console.print(table)
+        os.system('cls' if os.name == 'nt' else 'clear')
+        console.print(Panel(t('user_manager_title'), style="bold blue"))
         
-        user_map = {user.pw_name: user for user in users}
-        choices = ["Add New User"]
+        choices = [
+            t('user_menu_list'),
+        ]
         if users:
             choices.extend([questionary.Separator(), "Delete Existing User"])
         choices.extend([questionary.Separator(), "Back to Main Menu"])

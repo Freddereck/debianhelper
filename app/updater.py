@@ -2,6 +2,7 @@ import requests
 import re
 import os
 import questionary
+import base64
 from packaging import version
 from rich.console import Console
 from rich.panel import Panel
@@ -9,19 +10,30 @@ from rich.markdown import Markdown
 from app.translations import t
 
 # GitHub repository details
-GITHUB_REPO = "debianhelper/server-panel"
+GITHUB_REPO = "Freddereck/debianhelper"
 
 console = Console()
 
-def get_latest_release_info():
-    """Fetches the latest release information from the GitHub API."""
+def get_remote_file_content(path):
+    """Fetches and decodes file content from GitHub API."""
     try:
-        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-        response = requests.get(api_url, timeout=5)
+        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+        response = requests.get(api_url, timeout=10)
         response.raise_for_status()
-        return response.json()
-    except requests.RequestException:
+        data = response.json()
+        content_b64 = data.get('content', '')
+        return base64.b64decode(content_b64).decode('utf-8')
+    except (requests.RequestException, KeyError):
         return None
+
+def get_remote_version():
+    """Fetches the version from the remote server_panel.py file via API."""
+    content = get_remote_file_content("server_panel.py")
+    if content:
+        match = re.search(r"__version__\s*=\s*['\"](.+?)['\"]", content)
+        if match:
+            return match.group(1)
+    return None
 
 def get_local_version():
     """Reads the version from the local server_panel.py file."""
@@ -35,23 +47,23 @@ def get_local_version():
         return None
     return None
 
+def get_changelog():
+    """Fetches the CHANGELOG.md file from GitHub via API."""
+    return get_remote_file_content("CHANGELOG.md")
+
 def check_for_updates(on_startup=False):
     """Checks for updates and prompts the user if a new version is available."""
     if not on_startup:
         console.print(f"[cyan]{t('updater_checking')}[/cyan]")
 
-    release_info = get_latest_release_info()
-
+    remote_v = get_remote_version()
+    
     # Handle case where remote version check fails
-    if not release_info:
+    if not remote_v:
         if not on_startup:
             console.print(Panel(f"[bold red]{t('updater_remote_error')}[/bold red]", title="[bold red]Error[/bold red]"))
             questionary.press_any_key_to_continue().ask()
         return  # Silently fail on startup, show error on manual check
-
-    remote_v_tag = release_info.get("tag_name", "0.0.0")
-    remote_v = remote_v_tag.lstrip('v') # Remove 'v' prefix if it exists
-    changelog = release_info.get("body", t('updater_changelog_error'))
 
     local_v = get_local_version()
 
@@ -70,8 +82,12 @@ def check_for_updates(on_startup=False):
 
     if is_update_available:
         console.print(Panel(t('updater_new_version_found', version=remote_v), style="bold green"))
-        
-        console.print(Panel(Markdown(changelog), title=t('updater_changelog_title'), border_style="cyan"))
+
+        changelog = get_changelog()
+        if changelog:
+            console.print(Panel(Markdown(changelog), title=t('updater_changelog_title'), border_style="cyan"))
+        else:
+            console.print(f"[yellow]{t('updater_changelog_error')}[/yellow]")
 
         if questionary.confirm(t('updater_prompt_update')).ask():
             console.print(f"[yellow]{t('updater_running_pull')}[/yellow]")
@@ -80,7 +96,7 @@ def check_for_updates(on_startup=False):
                 console.print(f"[green]{t('updater_pull_success')}[/green]")
                 console.print(f"[bold cyan]{t('updater_restart_required')}[/bold cyan]")
                 questionary.press_any_key_to_continue().ask()
-                exit() # Exit to force user to restart with the new code
+                exit()  # Exit to force user to restart with the new code
             else:
                 console.print(f"[red]{t('updater_pull_failed')}[/red]")
                 questionary.press_any_key_to_continue().ask()

@@ -129,6 +129,8 @@
     "monitor_col_name": "Имя",
     "monitor_col_cpu": "CPU%",
     "monitor_col_mem": "MEM%",
+    "monitor_mem_disk_title": "Память и Диск",
+    "monitor_process_list": "Список процессов",
 
     "security_title": "Аудит безопасности и сети",
     "security_prompt": "Что бы вы хотели проверить?",
@@ -256,7 +258,7 @@
     "docker_images_prompt": "Выберите образ для управления:",
     "docker_images_col_id": "ID Образа",
     "docker_images_col_tags": "Теги",
-    "docker_images_col_size": "Размер (МБ)",
+    "docker_images_col_size": "Размер",
     "docker_image_action_prompt": "Действие для образа {tags}:",
     "docker_image_action_remove": "Удалить образ",
     "docker_image_action_pull": "Загрузить новый образ",
@@ -266,6 +268,12 @@
     "docker_image_pulling": "Загрузка образа {name}...",
     "docker_image_pull_success": "Образ {name} успешно загружен.",
     "docker_image_pull_error": "Ошибка при загрузке образа: {error}",
+    "docker_col_id": "ID Образа",
+    "docker_col_tags": "Теги",
+    "docker_col_size": "Размер",
+    "docker_no_images": "Локальные образы не найдены.",
+    "docker_tag_none": "<нет>",
+    "docker_error_listing_images": "Ошибка получения списка образов: {error}",
 
     "docker_images_not_implemented": "Управление образами еще не реализовано.",
 
@@ -342,5 +350,25 @@
     "menu_monitor": "Системный монитор",
     "menu_network_info": "Сетевые утилиты",
     "services_menu_list_all": "Показать все службы",
-    "wg_manage_title": "Управление WireGuard"
+    "wg_manage_title": "Управление WireGuard",
+    "wg_menu_add_client": "Добавить нового клиента",
+    "wg_menu_remove_client": "Удалить клиента",
+    "services_menu_back": "Назад",
+
+    "firewall_iptables_error": "Не удалось получить правила iptables. Убедитесь, что он установлен и у вас есть права.",
+    "firewall_ufw_not_installed": "UFW (Uncomplicated Firewall) не установлен.\nЭто рекомендуемый файрвол для Debian/Ubuntu.\n\nУстановите его командой: [cyan]sudo apt install ufw[/cyan]\nАктивируйте: [cyan]sudo ufw enable[/cyan]",
+    "firewall_ufw_not_active": "UFW (Uncomplicated Firewall) неактивен.\nРекомендуется активировать его для базовой защиты.\n\nАктивируйте командой: [cyan]sudo ufw enable[/cyan]",
+    "firewall_current_status": "Текущий статус UFW",
+    "firewall_status_error": "Не удалось получить статус UFW: {error}",
+    "firewall_action_prompt": "Выберите действие:",
+    "firewall_menu_enable": "Включить UFW",
+    "firewall_menu_disable": "Выключить UFW",
+    "firewall_menu_add": "Добавить правило (например, 'allow 22/tcp')",
+    "firewall_menu_delete": "Удалить правило (например, 'delete allow 22/tcp')",
+    "firewall_add_prompt": "Введите правило для добавления:",
+    "firewall_delete_prompt": "Введите правило для удаления:",
+
+    "network_toolkit_title": "Сетевые утилиты",
+    "user_manager_title": "Менеджер пользователей",
+    "firewall_iptables_active_panel": "Обнаружен активный файрвол iptables"
 } 

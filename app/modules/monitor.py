@@ -45,7 +45,7 @@ def get_process_table(processes, title, border_style):
     table.add_column(t('monitor_col_cpu'), justify="right")
     table.add_column(t('monitor_col_mem'), justify="right")
 
-    for p in processes[:10]: # Limit to top 10
+    for p in processes[:100]: # Limit to top 100 for performance
         table.add_row(
             str(p['pid']),
             p['name'],
@@ -54,58 +54,49 @@ def get_process_table(processes, title, border_style):
         )
     return table
 
-def get_layout() -> Layout:
-    """Defines the layout for the htop-like monitor."""
-    layout = Layout(name="root")
-    
-    procs = [p.info for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent'])]
-    
-    # Sort by CPU and Memory
-    top_cpu = sorted(procs, key=lambda p: p['cpu_percent'], reverse=True)
-    top_mem = sorted(procs, key=lambda p: p['memory_percent'], reverse=True)
-
+def get_meters_panel():
+    """Creates a panel with CPU, RAM, and Disk usage meters."""
     # Get usage stats
     cpu_usage = psutil.cpu_percent(percpu=True)
     ram_usage = psutil.virtual_memory()
     disk_usage = psutil.disk_usage('/')
 
-    # Create tables
-    process_table_cpu = get_process_table(top_cpu, t('monitor_top_cpu'), "green")
-    process_table_mem = get_process_table(top_mem, t('monitor_top_mem'), "magenta")
-    
-    # Create disk usage bars using a grid instead of a group
-    disk_grid = Table.grid(expand=True)
-    disk_grid.add_row(Text(f"{t('monitor_disk_total')}: {disk_usage.total / (1024**3):.2f} GB"))
-    disk_grid.add_row(Text(f"{t('monitor_disk_used')}: {disk_usage.used / (1024**3):.2f} GB ({disk_usage.percent}%)"))
-    disk_grid.add_row(get_cpu_bar(disk_usage.percent))
-    
-    # Create RAM usage bars
-    ram_grid = Table.grid(expand=True)
-    ram_grid.add_row(Text(f"{t('monitor_ram_total')}: {ram_usage.total / (1024**3):.2f} GB"))
-    ram_grid.add_row(Text(f"{t('monitor_ram_used')}: {ram_usage.used / (1024**3):.2f} GB ({ram_usage.percent}%)"))
-    ram_grid.add_row(get_cpu_bar(ram_usage.percent))
-
-    # CPU bars for each core
-    cpu_grid = Table.grid(expand=True)
+    # Grids for meters
+    cpu_grid = Table.grid(padding=(0, 1))
+    cpu_grid.add_column()
+    cpu_grid.add_column(width=50)
     for i, usage in enumerate(cpu_usage):
-        cpu_grid.add_row(f"Core {i+1}:", get_cpu_bar(usage))
+        cpu_grid.add_row(f"CPU {i+1}:", get_cpu_bar(usage))
 
+    ram_bar = get_cpu_bar(ram_usage.percent)
+    disk_bar = get_cpu_bar(disk_usage.percent)
+    
+    ram_text = f"RAM: {ram_usage.used / (1024**3):.1f}/{ram_usage.total / (1024**3):.1f} GB"
+    disk_text = f"Disk: {disk_usage.used / (1024**3):.1f}/{disk_usage.total / (1024**3):.1f} GB"
+
+    meters_grid = Table.grid(expand=True)
+    meters_grid.add_column(ratio=1)
+    meters_grid.add_column(ratio=2)
+    meters_grid.add_row(Panel(cpu_grid, title=t('monitor_cpu_title'), border_style="red"), 
+                        Panel(Table.grid(expand=True).add_row(ram_text, ram_bar).add_row(disk_text, disk_bar), 
+                              title=t('monitor_mem_disk_title'), border_style="yellow"))
+
+    return meters_grid
+
+def get_layout() -> Layout:
+    """Defines the layout for the htop-like monitor."""
+    layout = Layout(name="root")
+    
+    procs = [p.info for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent'])]
+    procs = sorted(procs, key=lambda p: p['cpu_percent'], reverse=True)
+
+    process_table = get_process_table(procs, t('monitor_process_list'), "green")
 
     layout.split(
-        Layout(name="header", size=3),
-        Layout(ratio=1, name="main"),
-        Layout(size=10, name="footer"),
+        Layout(Header(), name="header", size=3),
+        Layout(get_meters_panel(), name="meters", size=max(5, len(psutil.cpu_percent(percpu=True)) + 2)),
+        Layout(process_table, name="processes")
     )
-
-    layout["main"].split_row(Layout(process_table_cpu, name="side"), Layout(process_table_mem, name="body"))
-    
-    layout["footer"].split_row(
-        Layout(Panel(Align.center(ram_grid, vertical="middle"), title=t('monitor_ram_title'), border_style="yellow")),
-        Layout(Panel(Align.center(cpu_grid, vertical="middle"), title=t('monitor_cpu_title'), border_style="red")),
-        Layout(Panel(Align.center(disk_grid, vertical="middle"), title=t('monitor_disk_title'), border_style="cyan"))
-    )
-
-    layout["header"].update(Header())
     return layout
 
 def show_htop_monitor():

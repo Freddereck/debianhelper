@@ -98,7 +98,7 @@ def show_network_toolkit():
     
     while True:
         console.clear()
-        console.print(Panel("Network Toolkit", style="bold blue"))
+        console.print(Panel(t('network_toolkit_title'), style="bold blue"))
         
         choice = questionary.select(
             "Select a tool:",

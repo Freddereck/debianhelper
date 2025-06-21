@@ -21,54 +21,59 @@ from app.modules.network import show_network_toolkit
 from app.modules.pm2 import show_pm2_manager
 
 # Version of the application
-__version__ = "2.1.3"
+__version__ = "2.1.4"
 
 console = Console()
 
 def main_menu():
     """Displays the main menu and handles user input."""
-    # check_for_updates() # Check for updates on start - Moved to startup
+    # check_for_updates(on_startup=True) is called at startup now
 
+    menu_options = {
+        t('menu_health_check'): run_system_health_check,
+        t('menu_service_manager'): show_service_manager,
+        t('menu_docker_manager'): show_docker_manager,
+        t('menu_monitor'): show_htop_monitor,
+        t('menu_security_audit'): run_security_audit,
+        t('menu_dev_tools'): show_dev_manager,
+        t('menu_cron_manager'): show_cron_manager,
+        t('menu_log_viewer'): show_log_viewer,
+        t('menu_package_manager'): show_package_manager,
+        t('menu_firewall_manager'): show_firewall_manager,
+        t('menu_user_manager'): show_user_manager,
+        t('menu_network_info'): show_network_toolkit,
+        t('menu_pm2_manager'): show_pm2_manager,
+        t('menu_check_updates'): lambda: check_for_updates(on_startup=False),
+        t('menu_exit'): "exit"
+    }
+    
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
         
-        # Create a more appealing title
-        title = f"[bold bright_cyan]Server Panel v{__version__}[/bold bright_cyan]"
-        
-        console.print(Panel(title, 
-                            title=f"[bold blue]{t('main_menu_title')}[/bold blue]", 
-                            subtitle=f"[italic]{t('main_menu_subtitle')}[/italic]"))
-        
-        choices = {
-            t('menu_health_check'): run_system_health_check,
-            t('menu_service_manager'): show_service_manager,
-            t('menu_docker_manager'): show_docker_manager,
-            t('menu_monitor'): show_htop_monitor,
-            t('menu_security_audit'): run_security_audit,
-            t('menu_dev_tools'): show_dev_manager,
-            t('menu_cron_manager'): show_cron_manager,
-            t('menu_log_viewer'): show_log_viewer,
-            t('menu_package_manager'): show_package_manager,
-            t('menu_firewall_manager'): show_firewall_manager,
-            t('menu_user_manager'): show_user_manager,
-            t('menu_network_info'): show_network_toolkit,
-            t('menu_pm2_manager'): show_pm2_manager,
-            t('menu_check_updates'): check_for_updates,
-            t('menu_exit'): "exit"
-        }
+        header = Panel(f"[bold bright_cyan]Server Panel v{__version__}[/bold bright_cyan]", 
+                       title=f"[bold blue]🔥 {t('main_menu_title')} 🔥[/bold blue]", 
+                       subtitle=f"[italic cyan]mderick.su[/italic cyan]",
+                       border_style="bold magenta")
+        console.print(header)
 
         action = questionary.select(
             t('main_menu_prompt'),
-            choices=list(choices.keys()),
-            pointer="👉"
+            choices=list(menu_options.keys()),
+            pointer="👉",
+            use_indicator=True,
+            style=questionary.Style([
+                ('pointer', 'bold fg:yellow'),
+                ('highlighted', 'bold fg:yellow'),
+                ('selected', 'fg:white bg:dark_blue'),
+            ])
         ).ask()
 
-        if action is None or choices[action] == "exit":
+        if action is None or menu_options.get(action) == "exit":
             break
         
-        # Call the selected function
-        selected_function = choices.get(action)
+        selected_function = menu_options.get(action)
         if selected_function:
+            console.clear()
             selected_function()
 
 if __name__ == "__main__":

@@ -132,6 +132,7 @@ def manage_images(client):
 
 def manage_volumes(client):
     """Placeholder for volume management."""
+    # TODO: Implement volume management
 
 def show_docker_manager():
     """Main function for the Docker manager."""

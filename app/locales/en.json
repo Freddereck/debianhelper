@@ -131,6 +131,8 @@
     "monitor_col_name": "Name",
     "monitor_col_cpu": "CPU%",
     "monitor_col_mem": "MEM%",
+    "monitor_mem_disk_title": "Memory & Disk",
+    "monitor_process_list": "Process List",
 
     "security_title": "Security & Network Audit",
     "security_prompt": "What would you like to check?",
@@ -258,7 +260,7 @@
     "docker_images_prompt": "Select an image to manage:",
     "docker_images_col_id": "Image ID",
     "docker_images_col_tags": "Tags",
-    "docker_images_col_size": "Size (MB)",
+    "docker_images_col_size": "Size",
     "docker_image_action_prompt": "Action for image {tags}:",
     "docker_image_action_remove": "Remove Image",
     "docker_image_action_pull": "Pull New Image",
@@ -268,6 +270,12 @@
     "docker_image_pulling": "Pulling image {name}...",
     "docker_image_pull_success": "Successfully pulled {name}.",
     "docker_image_pull_error": "Error pulling image: {error}",
+    "docker_col_id": "Image ID",
+    "docker_col_tags": "Tags",
+    "docker_col_size": "Size",
+    "docker_no_images": "No local images found.",
+    "docker_tag_none": "<none>",
+    "docker_error_listing_images": "Error listing images: {error}",
 
     "docker_images_not_implemented": "Image management is not yet implemented.",
 
@@ -359,5 +367,26 @@
     "menu_monitor": "System Monitor",
     "menu_network_info": "Network Tools",
     "menu_exit": "Exit",
-    "services_menu_list_all": "List all services"
+    "services_menu_list_all": "List all services",
+    "services_menu_back": "Back",
+    "firewall_iptables_error": "Could not get iptables rules. Make sure it's installed and you have permissions.",
+    "firewall_ufw_not_installed": "UFW (Uncomplicated Firewall) is not installed.\nIt is the recommended firewall for Debian/Ubuntu.\n\nPlease install it with: [cyan]sudo apt install ufw[/cyan]\nAnd enable it with: [cyan]sudo ufw enable[/cyan]",
+    "firewall_ufw_not_active": "UFW (Uncomplicated Firewall) is not active.\nIt is recommended to enable it for basic protection.\n\nPlease enable it with: [cyan]sudo ufw enable[/cyan]",
+    "firewall_current_status": "Current UFW Status",
+    "firewall_status_error": "Could not get UFW status: {error}",
+    "firewall_action_prompt": "Select an action:",
+    "firewall_menu_enable": "Enable UFW",
+    "firewall_menu_disable": "Disable UFW",
+    "firewall_menu_add": "Add rule (e.g., 'allow 22/tcp')",
+    "firewall_menu_delete": "Delete rule (e.g., 'delete allow 22/tcp')",
+    "firewall_add_prompt": "Enter rule to add:",
+    "firewall_delete_prompt": "Enter rule to delete:",
+
+    "network_toolkit_title": "Network Toolkit",
+    "user_manager_title": "User Manager",
+    "firewall_iptables_active_panel": "Active iptables firewall detected",
+
+    "wg_menu_add_client": "Add New Client",
+    "wg_menu_remove_client": "Remove Client",
+    "services_menu_back": "Back"
 } 
