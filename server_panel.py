@@ -21,13 +21,13 @@ from app.modules.network import show_network_toolkit
 from app.modules.pm2 import show_pm2_manager
 
 # Version of the application
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 
 console = Console()
 
 def main_menu():
     """Displays the main menu and handles user input."""
-    # check_for_updates() # Check for updates on start
+    check_for_updates() # Check for updates on start
 
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
