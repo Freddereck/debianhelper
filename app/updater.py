@@ -1,8 +1,9 @@
-import requests
 import re
 import os
 import questionary
 import base64
+import json
+import subprocess
 from packaging import version
 from rich.console import Console
 from rich.panel import Panel
@@ -14,21 +15,27 @@ GITHUB_REPO = "Freddereck/debianhelper"
 
 console = Console()
 
-def get_remote_file_content(path):
-    """Fetches and decodes file content from GitHub API."""
+def get_remote_file_content_with_curl(path):
+    """Fetches and decodes file content from GitHub API using curl."""
     try:
-        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
-        response = requests.get(api_url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+        command = [
+            'curl',
+            '-sL', # Silent, follow redirects
+            '-H', 'Accept: application/vnd.github.v3+json', # Specify API version
+            f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+        ]
+        result = subprocess.run(command, capture_output=True, text=True, check=True, timeout=15)
+        data = json.loads(result.stdout)
         content_b64 = data.get('content', '')
+        if not content_b64:
+            return None
         return base64.b64decode(content_b64).decode('utf-8')
-    except (requests.RequestException, KeyError):
+    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, KeyError):
         return None
 
 def get_remote_version():
-    """Fetches the version from the remote server_panel.py file via API."""
-    content = get_remote_file_content("server_panel.py")
+    """Fetches the version from the remote server_panel.py file via API using curl."""
+    content = get_remote_file_content_with_curl("server_panel.py")
     if content:
         match = re.search(r"__version__\s*=\s*['\"](.+?)['\"]", content)
         if match:
@@ -48,13 +55,14 @@ def get_local_version():
     return None
 
 def get_changelog():
-    """Fetches the CHANGELOG.md file from GitHub via API."""
-    return get_remote_file_content("CHANGELOG.md")
+    """Fetches the CHANGELOG.md file from GitHub via API using curl."""
+    return get_remote_file_content_with_curl("CHANGELOG.md")
 
 def check_for_updates(on_startup=False):
     """Checks for updates and prompts the user if a new version is available."""
     if not on_startup:
         console.print(f"[cyan]{t('updater_checking')}[/cyan]")
+        console.print(Panel(t('updater_insecure_warning'), border_style="bold yellow"))
 
     remote_v = get_remote_version()
     

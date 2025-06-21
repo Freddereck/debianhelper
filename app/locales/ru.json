@@ -370,5 +370,6 @@
 
     "network_toolkit_title": "Сетевые утилиты",
     "user_manager_title": "Менеджер пользователей",
-    "firewall_iptables_active_panel": "Обнаружен активный файрвол iptables"
+    "firewall_iptables_active_panel": "Обнаружен активный файрвол iptables",
+    "updater_insecure_warning": "ВНИМАНИЕ: SSL-проверка отключена для обхода проблем с сертификатами."
 } 

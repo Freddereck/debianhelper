@@ -385,8 +385,5 @@
     "network_toolkit_title": "Network Toolkit",
     "user_manager_title": "User Manager",
     "firewall_iptables_active_panel": "Active iptables firewall detected",
-
-    "wg_menu_add_client": "Add New Client",
-    "wg_menu_remove_client": "Remove Client",
-    "services_menu_back": "Back"
+    "updater_insecure_warning": "WARNING: SSL verification is disabled to bypass certificate issues."
 } 
