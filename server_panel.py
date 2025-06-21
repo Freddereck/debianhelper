@@ -21,13 +21,13 @@ from app.modules.network import show_network_toolkit
 from app.modules.pm2 import show_pm2_manager
 
 # Version of the application
-__version__ = "2.1.2"
+__version__ = "2.1.3"
 
 console = Console()
 
 def main_menu():
     """Displays the main menu and handles user input."""
-    check_for_updates() # Check for updates on start
+    # check_for_updates() # Check for updates on start - Moved to startup
 
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     lang_code = load_language()
 
     # Check for updates on start
-    # check_for_updates() # Uncomment to enable auto-update check
+    check_for_updates(on_startup=True)
 
     try:
         # Warn if not running as root, as many functions require sudo

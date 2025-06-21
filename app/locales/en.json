@@ -45,6 +45,7 @@
 
     "health_check_title": "System Health Check",
     "health_os_info": "OS Information",
+    "health_cpu_usage": "CPU Usage",
 
     "services_title": "System Service Manager",
     "services_prompt_manage": "Which service to manage?",
@@ -117,6 +118,19 @@
     "monitor_col_cpu": "CPU %",
     "monitor_col_mem": "MEM %",
     "monitor_col_command": "Command",
+    "monitor_top_cpu": "Top Processes by CPU",
+    "monitor_top_mem": "Top Processes by RAM",
+    "monitor_disk_title": "Disk Usage",
+    "monitor_disk_total": "Total",
+    "monitor_disk_used": "Used",
+    "monitor_ram_title": "RAM Usage",
+    "monitor_ram_total": "Total",
+    "monitor_ram_used": "Used",
+    "monitor_cpu_title": "CPU Load",
+    "monitor_col_pid": "PID",
+    "monitor_col_name": "Name",
+    "monitor_col_cpu": "CPU%",
+    "monitor_col_mem": "MEM%",
 
     "security_title": "Security & Network Audit",
     "security_prompt": "What would you like to check?",
@@ -255,6 +269,8 @@
     "docker_image_pull_success": "Successfully pulled {name}.",
     "docker_image_pull_error": "Error pulling image: {error}",
 
+    "docker_images_not_implemented": "Image management is not yet implemented.",
+
     "cron_title": "Cron Job Manager",
     "cron_error_permission": "Permission denied. Please run this script with sudo to manage cron jobs.",
     "cron_current_jobs": "Current Cron Jobs for user: {user}",
@@ -310,6 +326,9 @@
     "updater_version_comparison": "Your version: {local} | Latest version: {remote}",
     "updater_restart_required": "Update complete. Please restart the panel to apply changes.",
 
+    "monitor_title": "System Monitor (htop)",
+    "monitor_htop_not_found": "htop is not found. Please install it.",
+
     "services_wireguard_status": "WireGuard Status",
     "services_wireguard_not_found": "WireGuard does not appear to be installed ('wg' command not found).",
     "services_wireguard_error": "Could not get WireGuard status.",
@@ -336,5 +355,6 @@
     "main_menu_prompt": "What would you like to do?",
     "menu_monitor": "System Monitor",
     "menu_network_info": "Network Tools",
-    "menu_exit": "Exit"
+    "menu_exit": "Exit",
+    "services_menu_list_all": "List all services"
 } 

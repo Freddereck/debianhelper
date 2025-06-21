@@ -44,6 +44,7 @@
     "health_press_enter": "Нажмите Enter, чтобы вернуться в меню.",
 
     "health_check_title": "Проверка состояния системы",
+    "health_os_info": "Информация об ОС",
 
     "services_title": "Менеджер системных служб",
     "services_prompt_manage": "Какой службой управлять?",
@@ -116,6 +117,18 @@
     "monitor_col_cpu": "CPU %",
     "monitor_col_mem": "MEM %",
     "monitor_col_command": "Команда",
+    "monitor_top_cpu": "Топ процессов по CPU",
+    "monitor_top_mem": "Топ процессов по RAM",
+    "monitor_disk_title": "Использование диска",
+    "monitor_disk_total": "Всего",
+    "monitor_disk_used": "Использовано",
+    "monitor_ram_title": "Использование RAM",
+    "monitor_ram_total": "Всего",
+    "monitor_ram_used": "Использовано",
+    "monitor_cpu_title": "Нагрузка на CPU",
+    "monitor_col_name": "Имя",
+    "monitor_col_cpu": "CPU%",
+    "monitor_col_mem": "MEM%",
 
     "security_title": "Аудит безопасности и сети",
     "security_prompt": "Что бы вы хотели проверить?",
@@ -254,6 +267,8 @@
     "docker_image_pull_success": "Образ {name} успешно загружен.",
     "docker_image_pull_error": "Ошибка при загрузке образа: {error}",
 
+    "docker_images_not_implemented": "Управление образами еще не реализовано.",
+
     "cron_title": "Менеджер задач Cron",
     "cron_error_permission": "Отказано в доступе. Пожалуйста, запустите этот скрипт с sudo для управления задачами cron.",
     "cron_current_jobs": "Текущие задачи Cron для пользователя: {user}",
@@ -309,6 +324,9 @@
     "updater_version_comparison": "Ваша версия: {local} | Последняя версия: {remote}",
     "updater_restart_required": "Обновление завершено. Пожалуйста, перезапустите панель, чтобы применить изменения.",
 
+    "monitor_title": "Системный монитор (htop)",
+    "monitor_htop_not_found": "htop не найден. Пожалуйста, установите его.",
+
     "services_wireguard_status": "Статус WireGuard",
     "services_wireguard_not_found": "WireGuard не найден ('wg' команда не найдена).",
     "services_wireguard_error": "Не удалось получить статус WireGuard.",
@@ -319,5 +337,7 @@
     "main_menu_subtitle": "Выберите действие для продолжения",
     "main_menu_prompt": "Что бы вы хотели сделать?",
     "menu_monitor": "Системный монитор",
-    "menu_network_info": "Сетевые утилиты"
+    "menu_network_info": "Сетевые утилиты",
+    "services_menu_list_all": "Показать все службы",
+    "wg_manage_title": "Управление WireGuard"
 } 

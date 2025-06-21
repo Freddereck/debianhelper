@@ -124,13 +124,14 @@ def manage_all_containers():
         else:
             break
 
-def manage_images():
-    """Menu to list, pull, and remove images."""
-    os.system('cls' if os.name == 'nt' else 'clear')
-    console.print(Panel(t('docker_images_title')))
-    # ... Implementation for image management ...
-    console.print("Image management not fully implemented yet.")
+def manage_images(client):
+    """Placeholder for image management."""
+    # TODO: Implement image management (pull, remove, list, etc.)
+    console.print(t('docker_images_not_implemented'))
     questionary.press_any_key_to_continue().ask()
+
+def manage_volumes(client):
+    """Placeholder for volume management."""
 
 def show_docker_manager():
     """Main function for the Docker manager."""
@@ -157,7 +158,7 @@ def show_docker_manager():
         elif choice == t('docker_menu_manage_containers'):
             manage_all_containers()
         elif choice == t('docker_menu_manage_images'):
-            manage_images()
+            manage_images(get_docker_client())
         elif choice == t('docker_menu_prune'):
             if Confirm.ask(t('docker_prune_confirm')):
                 try:

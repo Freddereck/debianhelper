@@ -12,8 +12,10 @@ console = Console()
 def get_cron():
     """Gets the CronTab for the current user, handling permissions."""
     try:
+        # Get the current user's username
+        current_user = getpass.getuser()
         # True means use sudo to access system-wide crontab if needed
-        return CronTab(user=True)
+        return CronTab(user=current_user)
     except IOError:
         console.print(f"[bold red]{t('cron_error_permission')}[/bold red]")
         return None

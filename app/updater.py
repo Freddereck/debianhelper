@@ -49,7 +49,7 @@ def get_changelog():
     except requests.RequestException:
         return None
 
-def check_for_updates():
+def check_for_updates(on_startup=False):
     """Checks for updates and prompts the user if a new version is available."""
     local_v = get_local_version()
     remote_v = get_remote_version()
@@ -57,9 +57,14 @@ def check_for_updates():
     if not local_v or not remote_v:
         return # Cannot compare versions
     
+    is_update_available = version.parse(local_v) < version.parse(remote_v)
+
+    if not is_update_available and on_startup:
+        return # Silently return on startup if no update is available
+
     console.print(Panel(t('updater_version_comparison', local=local_v, remote=remote_v), style="bold yellow"))
 
-    if version.parse(local_v) < version.parse(remote_v):
+    if is_update_available:
         console.print(Panel(t('updater_new_version_found', version=remote_v), style="bold green"))
         
         changelog = get_changelog()
@@ -74,11 +79,12 @@ def check_for_updates():
             if return_code == 0:
                 console.print(f"[green]{t('updater_pull_success')}[/green]")
                 console.print(f"[bold cyan]{t('updater_restart_required')}[/bold cyan]")
+                questionary.press_any_key_to_continue().ask()
+                exit() # Exit to force user to restart with the new code
             else:
                 console.print(f"[red]{t('updater_pull_failed')}[/red]")
-            # Pause to allow user to see the message
-            questionary.press_any_key_to_continue().ask()
+                questionary.press_any_key_to_continue().ask()
     else:
-        # Optional: uncomment to show a message when up-to-date
+        # This part is reached only when not on startup and no update is available
         console.print(f"[green]{t('updater_up_to_date')}[/green]")
         questionary.press_any_key_to_continue().ask() 

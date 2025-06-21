@@ -78,22 +78,34 @@ def get_layout() -> Layout:
     disk_grid.add_row(Text(f"{t('monitor_disk_total')}: {disk_usage.total / (1024**3):.2f} GB"))
     disk_grid.add_row(Text(f"{t('monitor_disk_used')}: {disk_usage.used / (1024**3):.2f} GB ({disk_usage.percent}%)"))
     disk_grid.add_row(get_cpu_bar(disk_usage.percent))
+    
+    # Create RAM usage bars
+    ram_grid = Table.grid(expand=True)
+    ram_grid.add_row(Text(f"{t('monitor_ram_total')}: {ram_usage.total / (1024**3):.2f} GB"))
+    ram_grid.add_row(Text(f"{t('monitor_ram_used')}: {ram_usage.used / (1024**3):.2f} GB ({ram_usage.percent}%)"))
+    ram_grid.add_row(get_cpu_bar(ram_usage.percent))
+
+    # CPU bars for each core
+    cpu_grid = Table.grid(expand=True)
+    for i, usage in enumerate(cpu_usage):
+        cpu_grid.add_row(f"Core {i+1}:", get_cpu_bar(usage))
 
 
     layout.split(
         Layout(name="header", size=3),
         Layout(ratio=1, name="main"),
-        Layout(size=7, name="footer"),
+        Layout(size=10, name="footer"),
     )
 
     layout["main"].split_row(Layout(process_table_cpu, name="side"), Layout(process_table_mem, name="body"))
     
+    layout["footer"].split_row(
+        Layout(Panel(Align.center(ram_grid, vertical="middle"), title=t('monitor_ram_title'), border_style="yellow")),
+        Layout(Panel(Align.center(cpu_grid, vertical="middle"), title=t('monitor_cpu_title'), border_style="red")),
+        Layout(Panel(Align.center(disk_grid, vertical="middle"), title=t('monitor_disk_title'), border_style="cyan"))
+    )
+
     layout["header"].update(Header())
-    layout["footer"].update(Panel(
-        Align.center(disk_grid, vertical="middle"),
-        title=t('monitor_disk_title'),
-        border_style="cyan"
-    ))
     return layout
 
 def show_htop_monitor():
