@@ -4,7 +4,7 @@
     "main_prompt": "Что бы вы хотели сделать?",
     "goodbye": "До свидания!",
     "critical_error": "Произошла критическая ошибка: {error}",
-    "root_warning": "Внимание: Некоторые функции требуют прав суперпользователя (sudo).",
+    "root_warning": "Запуск без прав суперпользователя. Некоторые функции могут работать некорректно.",
 
     "menu_live_dashboard": "Панель мониторинга системы",
     "menu_advanced_monitor": "Расширенный мониторинг системы",
@@ -306,5 +306,13 @@
 
     "services_wireguard_status": "Статус WireGuard",
     "services_wireguard_not_found": "WireGuard не найден ('wg' команда не найдена).",
-    "services_wireguard_error": "Не удалось получить статус WireGuard."
+    "services_wireguard_error": "Не удалось получить статус WireGuard.",
+    "wg_remove_confirm": "Вы уверены, что хотите удалить клиента {client_name}?",
+    "wg_client_removed": "Клиент {client_name} и его конфигурация были удалены.",
+
+    "main_menu_title": "Панель управления сервером",
+    "main_menu_subtitle": "Выберите действие для продолжения",
+    "main_menu_prompt": "Что бы вы хотели сделать?",
+    "menu_monitor": "Системный монитор",
+    "menu_network_info": "Сетевые утилиты"
 } 

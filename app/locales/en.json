@@ -4,7 +4,7 @@
     "main_prompt": "What would you like to do?",
     "goodbye": "Goodbye!",
     "critical_error": "A critical error occurred: {error}",
-    "root_warning": "Warning: Some functions require root privileges (sudo).",
+    "root_warning": "Running without root privileges. Some features may not work correctly.",
     
     "menu_live_dashboard": "Live System Dashboard",
     "menu_advanced_monitor": "Advanced System Monitor",
@@ -317,5 +317,12 @@
     "wg_prompt_remove_client": "Select a client to remove:",
     "wg_error_no_clients": "No clients found for this interface.",
     "wg_remove_confirm": "Are you sure you want to remove client {client_name}?",
-    "wg_client_removed": "Client {client_name} and their config have been removed."
+    "wg_client_removed": "Client {client_name} and their config have been removed.",
+
+    "main_menu_title": "Server Control Panel",
+    "main_menu_subtitle": "Select an option to continue",
+    "main_menu_prompt": "What would you like to do?",
+    "menu_monitor": "System Monitor",
+    "menu_network_info": "Network Tools",
+    "menu_exit": "Exit"
 } 
