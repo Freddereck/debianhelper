@@ -21,6 +21,7 @@
     "menu_pm2_manager": "PM2 Process Manager",
     "menu_user_manager": "User Manager",
     "menu_exit": "Exit",
+    "menu_check_updates": "Check for Updates",
 
     "health_title": "System Health Check",
     "health_menu_check_updates": "Check for APT Updates",
@@ -41,6 +42,9 @@
     "health_clean_complete": "Clean finished.",
     "health_cleanup_finished": "System cleanup finished successfully.",
     "health_press_enter": "Press Enter to return to the menu.",
+
+    "health_check_title": "System Health Check",
+    "health_os_info": "OS Information",
 
     "services_title": "System Service Manager",
     "services_prompt_manage": "Which service to manage?",
@@ -295,8 +299,16 @@
     "packages_list_title": "All Installed Packages",
     "packages_list_error": "Could not retrieve package list.",
 
-    "updater_pull_failed": "Update failed. Please run 'git pull' manually.",
-    "updater_up_to_date": "Your application is up to date.",
+    "updater_new_version_found": "New version found: {version}",
+    "updater_changelog_title": "Changelog",
+    "updater_changelog_error": "Could not fetch changelog.",
+    "updater_prompt_update": "Do you want to update now?",
+    "updater_running_pull": "Forcing update to the latest version...",
+    "updater_pull_success": "Panel updated successfully!",
+    "updater_pull_failed": "Failed to execute git pull. Please check for any uncommitted changes.",
+    "updater_up_to_date": "You are on the latest version.",
+    "updater_version_comparison": "Your version: {local} | Latest version: {remote}",
+    "updater_restart_required": "Update complete. Please restart the panel to apply changes.",
 
     "services_wireguard_status": "WireGuard Status",
     "services_wireguard_not_found": "WireGuard does not appear to be installed ('wg' command not found).",

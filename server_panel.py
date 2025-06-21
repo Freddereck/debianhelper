@@ -53,6 +53,7 @@ def main_menu():
             t('menu_user_manager'): show_user_manager,
             t('menu_network_info'): show_network_toolkit,
             t('menu_pm2_manager'): show_pm2_manager,
+            t('menu_check_updates'): check_for_updates,
             t('menu_exit'): "exit"
         }
 

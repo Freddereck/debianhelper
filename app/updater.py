@@ -56,6 +56,8 @@ def check_for_updates():
 
     if not local_v or not remote_v:
         return # Cannot compare versions
+    
+    console.print(Panel(t('updater_version_comparison', local=local_v, remote=remote_v), style="bold yellow"))
 
     if version.parse(local_v) < version.parse(remote_v):
         console.print(Panel(t('updater_new_version_found', version=remote_v), style="bold green"))
@@ -68,14 +70,15 @@ def check_for_updates():
 
         if questionary.confirm(t('updater_prompt_update')).ask():
             console.print(f"[yellow]{t('updater_running_pull')}[/yellow]")
-            return_code = os.system("git pull")
+            return_code = os.system("git fetch --all && git reset --hard origin/main")
             if return_code == 0:
                 console.print(f"[green]{t('updater_pull_success')}[/green]")
+                console.print(f"[bold cyan]{t('updater_restart_required')}[/bold cyan]")
             else:
                 console.print(f"[red]{t('updater_pull_failed')}[/red]")
-            # Exit after update attempt to force restart
-            exit()
+            # Pause to allow user to see the message
+            questionary.press_any_key_to_continue().ask()
     else:
         # Optional: uncomment to show a message when up-to-date
-        # console.print(f"[green]{t('updater_up_to_date')}[/green]")
-        pass 
+        console.print(f"[green]{t('updater_up_to_date')}[/green]")
+        questionary.press_any_key_to_continue().ask() 

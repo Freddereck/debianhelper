@@ -21,6 +21,7 @@
     "menu_pm2_manager": "Менеджер процессов PM2",
     "menu_user_manager": "Менеджер пользователей",
     "menu_exit": "Выход",
+    "menu_check_updates": "Проверить обновления",
 
     "health_title": "Проверка работоспособности системы",
     "health_menu_check_updates": "Проверить обновления APT",
@@ -41,6 +42,8 @@
     "health_clean_complete": "Очистка завершена.",
     "health_cleanup_finished": "Очистка системы успешно завершена.",
     "health_press_enter": "Нажмите Enter, чтобы вернуться в меню.",
+
+    "health_check_title": "Проверка состояния системы",
 
     "services_title": "Менеджер системных служб",
     "services_prompt_manage": "Какой службой управлять?",
@@ -295,14 +298,16 @@
     "packages_list_title": "Все установленные пакеты",
     "packages_list_error": "Не удалось получить список пакетов.",
 
-    "updater_new_version_found": "Найдена новая версия {version}!",
+    "updater_new_version_found": "Найдена новая версия: {version}",
     "updater_changelog_title": "Список изменений",
     "updater_changelog_error": "Не удалось загрузить список изменений.",
-    "updater_prompt_update": "Вы хотите загрузить последние изменения? (git pull)",
-    "updater_running_pull": "Выполняется 'git pull'...",
-    "updater_pull_success": "Обновление успешно! Пожалуйста, перезапустите скрипт.",
-    "updater_pull_failed": "Обновление не удалось. Пожалуйста, выполните 'git pull' вручную.",
-    "updater_up_to_date": "Ваша версия приложения актуальна.",
+    "updater_prompt_update": "Хотите обновиться сейчас?",
+    "updater_running_pull": "Принудительное обновление до последней версии...",
+    "updater_pull_success": "Панель успешно обновлена!",
+    "updater_pull_failed": "Не удалось выполнить git pull. Проверьте, нет ли у вас несохраненных изменений.",
+    "updater_up_to_date": "У вас установлена последняя версия.",
+    "updater_version_comparison": "Ваша версия: {local} | Последняя версия: {remote}",
+    "updater_restart_required": "Обновление завершено. Пожалуйста, перезапустите панель, чтобы применить изменения.",
 
     "services_wireguard_status": "Статус WireGuard",
     "services_wireguard_not_found": "WireGuard не найден ('wg' команда не найдена).",
