@@ -615,7 +615,7 @@ SOFTWARE_CATALOG = {
         "version_cmd": "cat /etc/webmin/version 2>/dev/null || echo 'N/A'"
     },
     "WireGuard": {
-        "check": "wg", "install": service_install, "manage": manage_wireguard, "package_name": "wireguard-tools",
+        "check": "wg", "install": service_install, "remove": service_uninstall, "manage": manage_wireguard, "package_name": "wireguard-tools",
         "version_cmd": "wg --version | awk '{print $2}'"
     },
     "Docker Compose": {

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.5] - 2025-06-24
+
+### Added
+- **Software Manager**: Added the ability to completely uninstall WireGuard (`wireguard-tools` package) through the manager interface, which was previously missing.
+
 ## [2.2.4] - 2025-06-24
 
 ### Fixed

@@ -23,7 +23,7 @@ from app.modules.software_manager import show_software_manager
 from app.utils import is_tool_installed
 
 # Version of the application
-__version__ = "2.2.4"
+__version__ = "2.2.5"
 
 console = Console()
 
