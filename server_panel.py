@@ -21,7 +21,7 @@ from app.modules.network import show_network_toolkit
 from app.modules.pm2 import show_pm2_manager
 
 # Version of the application
-__version__ = "2.1.1"
+__version__ = "2.1.2"
 
 console = Console()
 
