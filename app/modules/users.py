@@ -1,10 +1,11 @@
-import pwd
-import subprocess
+import os
+import getpass
 import questionary
+import pwd
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-import os
+from app.translations import t
 
 console = Console()
 

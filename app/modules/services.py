@@ -81,6 +81,79 @@ def add_wireguard_client(interface):
     show_qr_code(client_config)
     questionary.press_any_key_to_continue().ask()
 
+def list_wireguard_clients(interface):
+    """Parses the server config to list all clients and their details."""
+    server_conf_path = f"/etc/wireguard/{interface}.conf"
+    try:
+        server_config = run_command_for_output(f"sudo cat {server_conf_path}")
+    except FileNotFoundError:
+        console.print(t('wg_error_no_interfaces'))
+        return
+
+    # Find all peers with a client name comment
+    clients = re.findall(r"# Client: (.+)\n\[Peer\]\nPublicKey = (.+)\nAllowedIPs = (.+)", server_config)
+    
+    if not clients:
+        console.print(t('wg_error_no_clients'))
+        questionary.press_any_key_to_continue().ask()
+        return
+
+    table = Table(title=t('wg_client_list_title'))
+    table.add_column(t('wg_col_client_name'), style="cyan")
+    table.add_column(t('wg_col_public_key'), style="green")
+    table.add_column(t('wg_col_ip'), style="magenta")
+    
+    client_map = {}
+    for name, pub_key, ip in clients:
+        table.add_row(name, pub_key, ip)
+        client_map[name] = {'pub_key': pub_key, 'ip': ip}
+
+    console.print(table)
+    
+    client_to_manage = questionary.select(
+        t('wg_prompt_select_client'),
+        choices=[c[0] for c in clients] + [t('services_menu_back')]
+    ).ask()
+
+    if client_to_manage and client_to_manage != t('services_menu_back'):
+        show_client_details_menu(client_to_manage)
+
+def show_client_details_menu(client_name):
+    """Shows a menu with actions for a specific client."""
+    client_conf_path = f"/etc/wireguard/clients/{client_name}.conf"
+    
+    while True:
+        console.clear()
+        console.print(Panel(t('wg_client_details_title', client_name=client_name), style="bold blue"))
+        
+        choice = questionary.select(
+            "Select an action:",
+            choices=[
+                t('wg_menu_show_config'),
+                t('wg_menu_show_qr'),
+                t('services_menu_back')
+            ]
+        ).ask()
+
+        if choice == t('services_menu_back') or choice is None:
+            break
+        
+        try:
+            client_config = run_command_for_output(f"sudo cat {client_conf_path}")
+            if not client_config:
+                console.print("[red]Could not read client config.[/red]"); return
+            
+            if choice == t('wg_menu_show_config'):
+                console.print(Panel(client_config, title=t('wg_client_config_title')))
+                questionary.press_any_key_to_continue().ask()
+            elif choice == t('wg_menu_show_qr'):
+                show_qr_code(client_config)
+                questionary.press_any_key_to_continue().ask()
+        except FileNotFoundError:
+            console.print(f"[red]Config for {client_name} not found.[/red]")
+            questionary.press_any_key_to_continue().ask()
+            break
+
 def remove_wireguard_client(interface):
     server_conf_path = f"/etc/wireguard/{interface}.conf"
     server_config = run_command_for_output(f"sudo cat {server_conf_path}")
@@ -118,8 +191,9 @@ def manage_wireguard():
     if not interface: return
 
     while True:
-        action = questionary.select(t('wg_manage_title'), choices=[t('wg_menu_add_client'), t('wg_menu_remove_client'), t('services_menu_back')]).ask()
-        if action == t('wg_menu_add_client'): add_wireguard_client(interface)
+        action = questionary.select(t('wg_manage_title'), choices=[t('wg_menu_list_clients'), t('wg_menu_add_client'), t('wg_menu_remove_client'), t('services_menu_back')]).ask()
+        if action == t('wg_menu_list_clients'): list_wireguard_clients(interface)
+        elif action == t('wg_menu_add_client'): add_wireguard_client(interface)
         elif action == t('wg_menu_remove_client'): remove_wireguard_client(interface)
         else: break
 

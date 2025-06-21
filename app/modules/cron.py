@@ -12,25 +12,14 @@ console = Console()
 def get_cron():
     """Gets the CronTab for the current user, handling permissions."""
     try:
-        # Check if running as root to decide how to get the crontab
-        if os.geteuid() == 0:
-            # When root, user=True might access system-wide crontabs,
-            # or you might want to specify a user. Let's stick to the root's own crontab.
-            return CronTab(user='root')
-        else:
-            # For non-root users, get their own crontab
-            return CronTab(user=getpass.getuser())
-    except Exception:
-        # A more general exception to catch various crontab errors
-        try:
-            # Fallback for systems where user=True is still the way for root
-            if os.geteuid() == 0:
-                return CronTab(user=True)
-            return None # Should not happen for non-root
-        except Exception as e:
-            console.print(f"[bold red]{t('cron_error_permission')}[/bold red]")
-            console.print(f"[bold red]Error: {e}[/bold red]")
-            return None
+        # This is the most compatible way, should work with old and new versions.
+        # The library itself should handle getting the right crontab based on EUID.
+        # When run with sudo, it should access root's crontab.
+        return CronTab()
+    except Exception as e:
+        console.print(f"[bold red]{t('cron_error_permission')}[/bold red]")
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        return None
 
 def list_jobs(cron):
     """Lists all cron jobs for the user."""

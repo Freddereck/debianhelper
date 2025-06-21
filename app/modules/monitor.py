@@ -74,12 +74,16 @@ def get_meters_panel():
     ram_text = f"RAM: {ram_usage.used / (1024**3):.1f}/{ram_usage.total / (1024**3):.1f} GB"
     disk_text = f"Disk: {disk_usage.used / (1024**3):.1f}/{disk_usage.total / (1024**3):.1f} GB"
 
+    # Create the second panel's grid separately to avoid the chained call error
+    mem_disk_grid = Table.grid(expand=True)
+    mem_disk_grid.add_row(ram_text, ram_bar)
+    mem_disk_grid.add_row(disk_text, disk_bar)
+
     meters_grid = Table.grid(expand=True)
     meters_grid.add_column(ratio=1)
     meters_grid.add_column(ratio=2)
     meters_grid.add_row(Panel(cpu_grid, title=t('monitor_cpu_title'), border_style="red"), 
-                        Panel(Table.grid(expand=True).add_row(ram_text, ram_bar).add_row(disk_text, disk_bar), 
-                              title=t('monitor_mem_disk_title'), border_style="yellow"))
+                        Panel(mem_disk_grid, title=t('monitor_mem_disk_title'), border_style="yellow"))
 
     return meters_grid
 
