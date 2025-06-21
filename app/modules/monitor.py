@@ -10,7 +10,6 @@ from rich.layout import Layout
 from rich.progress_bar import ProgressBar
 from rich.align import Align
 from rich.text import Text
-from rich.group import Group
 from app.utils import get_uptime
 from app.translations import t
 
@@ -74,12 +73,12 @@ def get_layout() -> Layout:
     process_table_cpu = get_process_table(top_cpu, t('monitor_top_cpu'), "green")
     process_table_mem = get_process_table(top_mem, t('monitor_top_mem'), "magenta")
     
-    # Create disk usage bars
-    disk_usage_bars = Group(
-        Text(f"{t('monitor_disk_total')}: {disk_usage.total / (1024**3):.2f} GB"),
-        Text(f"{t('monitor_disk_used')}: {disk_usage.used / (1024**3):.2f} GB ({disk_usage.percent}%)"),
-        get_cpu_bar(disk_usage.percent)
-    )
+    # Create disk usage bars using a grid instead of a group
+    disk_grid = Table.grid(expand=True)
+    disk_grid.add_row(Text(f"{t('monitor_disk_total')}: {disk_usage.total / (1024**3):.2f} GB"))
+    disk_grid.add_row(Text(f"{t('monitor_disk_used')}: {disk_usage.used / (1024**3):.2f} GB ({disk_usage.percent}%)"))
+    disk_grid.add_row(get_cpu_bar(disk_usage.percent))
+
 
     layout.split(
         Layout(name="header", size=3),
@@ -91,7 +90,7 @@ def get_layout() -> Layout:
     
     layout["header"].update(Header())
     layout["footer"].update(Panel(
-        Align.center(disk_usage_bars, vertical="middle"),
+        Align.center(disk_grid, vertical="middle"),
         title=t('monitor_disk_title'),
         border_style="cyan"
     ))
