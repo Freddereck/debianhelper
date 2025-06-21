@@ -16,13 +16,17 @@ PYENV_ROOT = os.path.join(home_dir, ".pyenv")
 PYENV_SCRIPT = os.path.join(PYENV_ROOT, "bin", "pyenv")
 
 # --- NVM Functions ---
-def nvm_command(command):
+def nvm_command(command, live=False):
     """Executes a command using nvm."""
     if not os.path.exists(NVM_SCRIPT):
         console.print(f"[red]{t('nvm_not_installed')}[/red]")
         return
     full_command = f"bash -c 'source {NVM_SCRIPT} && {command}'"
-    run_command(full_command)
+    
+    if live:
+        run_command_live(full_command, "nvm_live.log")
+    else:
+        run_command(full_command)
 
 def manage_nodejs():
     """Menu for managing Node.js and PM2 via nvm."""
@@ -58,11 +62,11 @@ def manage_nodejs():
         if action == t('nodejs_install_version'):
             version = questionary.text(t('nodejs_prompt_version')).ask()
             if version:
-                nvm_command(f"nvm install {version}")
+                nvm_command(f"nvm install {version}", live=True)
         elif action == t('nodejs_list_versions'):
             nvm_command("nvm ls")
         elif action == t('pm2_install_update'):
-            nvm_command("npm install pm2@latest -g")
+            nvm_command("npm install pm2@latest -g", live=True)
         
         if action != t('back'):
             questionary.press_any_key_to_continue().ask()

@@ -4,6 +4,9 @@ from rich.console import Console
 from rich.panel import Panel
 from app.utils import run_command, is_tool_installed, run_command_live, run_command_for_output
 from app.translations import t
+import re
+import qrcode
+from rich.table import Table
 
 console = Console()
 
@@ -232,6 +235,278 @@ def manage_fail2ban():
             
         questionary.press_any_key_to_continue().ask()
 
+# --- WireGuard Management (Moved from services.py) ---
+
+def generate_wg_keys():
+    """Generates a WireGuard private and public key pair."""
+    priv_key = run_command_for_output("wg genkey")
+    pub_key = run_command_for_output(f"echo '{priv_key}' | wg pubkey")
+    return priv_key.strip(), pub_key.strip()
+
+def get_next_ip(server_config_content):
+    """Finds the next available IP address for a new client."""
+    peer_ips = re.findall(r"AllowedIPs\s*=\s*([\d\.]+/32)", server_config_content)
+    used_ips = {int(ip.split('.')[-1].split('/')[0]) for ip in peer_ips}
+    
+    network_match = re.search(r"Address\s*=\s*([\d\.]+/\d+)", server_config_content)
+    if not network_match: return None # Cannot determine network
+    network_address = network_match.group(1).split('/')[0]
+    base_ip = ".".join(network_address.split('.')[:3])
+    
+    next_ip_num = 2
+    while next_ip_num in used_ips:
+        next_ip_num += 1
+    return f"{base_ip}.{next_ip_num}"
+
+def show_qr_code(text):
+    """Generates and displays a QR code in the terminal."""
+    qr = qrcode.QRCode()
+    qr.add_data(text)
+    qr.make(fit=True)
+    qr.print_ascii(invert=True)
+
+def add_wireguard_client(interface):
+    server_conf_path = f"/etc/wireguard/{interface}.conf"
+    client_name = questionary.text(t('wg_prompt_client_name')).ask()
+    if not client_name: return
+
+    if os.path.exists(f"/etc/wireguard/clients/{client_name}.conf"):
+        console.print(f"[red]{t('wg_error_client_exists')}[/red]"); return
+        
+    with console.status(t('wg_generating_keys')):
+        client_priv_key, client_pub_key = generate_wg_keys()
+        server_config = run_command_for_output(f"sudo cat {server_conf_path}")
+        
+        pkey_match = re.search(r"PrivateKey\s*=\s*(.+)", server_config)
+        port_match = re.search(r"ListenPort\s*=\s*(\d+)", server_config)
+        if not pkey_match or not port_match: console.print("[red]Server config is invalid.[/red]"); return
+
+        server_priv_key = pkey_match.group(1)
+        server_pub_key = run_command_for_output(f"echo '{server_priv_key}' | wg pubkey").strip()
+        server_endpoint = run_command_for_output("curl -s ifconfig.me").strip() + ":" + port_match.group(1)
+        client_ip = get_next_ip(server_config)
+
+    client_config = f"[Interface]\nPrivateKey = {client_priv_key}\nAddress = {client_ip}/32\nDNS = 8.8.8.8\n\n[Peer]\nPublicKey = {server_pub_key}\nEndpoint = {server_endpoint}\nAllowedIPs = 0.0.0.0/0\nPersistentKeepalive = 25"
+    peer_entry = f"\n# Client: {client_name}\n[Peer]\nPublicKey = {client_pub_key}\nAllowedIPs = {client_ip}/32"
+    
+    run_command_for_output(f"echo '{peer_entry}' | sudo tee -a {server_conf_path}")
+    os.makedirs("/etc/wireguard/clients", exist_ok=True)
+    client_conf_path = f"/etc/wireguard/clients/{client_name}.conf"
+    run_command_for_output(f"echo '{client_config}' | sudo tee {client_conf_path}")
+
+    run_command_for_output(f"sudo wg-quick down {interface} && sudo wg-quick up {interface}")
+
+    console.print(Panel(t('wg_client_added_title'), style="bold green"))
+    console.print(Panel(client_config, title=t('wg_client_config_title'), border_style="cyan"))
+    console.print(t('wg_client_config_path', path=client_conf_path))
+    console.print(Panel(t('wg_client_qr_code_title'), border_style="magenta"))
+    show_qr_code(client_config)
+    questionary.press_any_key_to_continue().ask()
+
+def list_wireguard_clients(interface):
+    """Parses the server config to list all clients and their details."""
+    server_conf_path = f"/etc/wireguard/{interface}.conf"
+    try:
+        server_config = run_command_for_output(f"sudo cat {server_conf_path}")
+    except FileNotFoundError:
+        console.print(t('wg_error_no_interfaces'))
+        return
+
+    # Find all peers with a client name comment
+    clients = re.findall(r"# Client: (.+)\n\[Peer\]\nPublicKey = (.+)\nAllowedIPs = (.+)", server_config)
+    
+    if not clients:
+        console.print(t('wg_error_no_clients'))
+        questionary.press_any_key_to_continue().ask()
+        return
+
+    table = Table(title=t('wg_client_list_title'))
+    table.add_column(t('wg_col_client_name'), style="cyan")
+    table.add_column(t('wg_col_public_key'), style="green")
+    table.add_column(t('wg_col_ip'), style="magenta")
+    
+    client_map = {}
+    for name, pub_key, ip in clients:
+        table.add_row(name, pub_key, ip)
+        client_map[name] = {'pub_key': pub_key, 'ip': ip}
+
+    console.print(table)
+    
+    client_to_manage = questionary.select(
+        t('wg_prompt_select_client'),
+        choices=[c[0] for c in clients] + [t('back')]
+    ).ask()
+
+    if client_to_manage and client_to_manage != t('back'):
+        show_client_details_menu(client_to_manage)
+
+def show_client_details_menu(client_name):
+    """Shows a menu with actions for a specific client."""
+    client_conf_path = f"/etc/wireguard/clients/{client_name}.conf"
+    
+    while True:
+        console.clear()
+        console.print(Panel(t('wg_client_details_title', client_name=client_name), style="bold blue"))
+        
+        choice = questionary.select(
+            "Select an action:",
+            choices=[
+                t('wg_menu_show_config'),
+                t('wg_menu_show_qr'),
+                t('back')
+            ]
+        ).ask()
+
+        if choice == t('back') or choice is None:
+            break
+        
+        try:
+            client_config = run_command_for_output(f"sudo cat {client_conf_path}")
+            if not client_config:
+                console.print("[red]Could not read client config.[/red]"); return
+            
+            if choice == t('wg_menu_show_config'):
+                console.print(Panel(client_config, title=t('wg_client_config_title')))
+                questionary.press_any_key_to_continue().ask()
+            elif choice == t('wg_menu_show_qr'):
+                show_qr_code(client_config)
+                questionary.press_any_key_to_continue().ask()
+        except FileNotFoundError:
+            console.print(f"[red]Config for {client_name} not found.[/red]")
+            questionary.press_any_key_to_continue().ask()
+            break
+
+def remove_wireguard_client(interface):
+    server_conf_path = f"/etc/wireguard/{interface}.conf"
+    server_config = run_command_for_output(f"sudo cat {server_conf_path}")
+    
+    clients = re.findall(r"# Client: (.+)", server_config)
+    if not clients:
+        console.print(t('wg_error_no_clients')); return
+
+    client_to_remove = questionary.select(t('wg_prompt_remove_client'), choices=clients).ask()
+    if not client_to_remove: return
+
+    if questionary.confirm(t('wg_remove_confirm', client_name=client_to_remove)).ask():
+        client_pub_key = run_command_for_output(f"sudo cat /etc/wireguard/clients/{client_to_remove}.conf | grep PublicKey | cut -d ' ' -f 3")
+        
+        # Remove from server config
+        updated_config = re.sub(f"# Client: {client_to_remove}\n\[Peer\]\nPublicKey = .+\nAllowedIPs = .+\n", "", server_config)
+        run_command_for_output(f"echo '{updated_config}' | sudo tee {server_conf_path}")
+        
+        # Remove client file
+        run_command_for_output(f"sudo rm /etc/wireguard/clients/{client_to_remove}.conf")
+
+        run_command_for_output(f"sudo wg-quick down {interface} && sudo wg-quick up {interface}")
+        console.print(f"[green]{t('wg_client_removed', client_name=client_to_remove)}[/green]")
+        questionary.press_any_key_to_continue().ask()
+
+def manage_wireguard():
+    WG_PATH = "/etc/wireguard"
+    try:
+        interfaces = [f.replace('.conf', '') for f in os.listdir(WG_PATH) if f.endswith('.conf')]
+        if not interfaces: 
+            console.print(t('wg_error_no_interfaces'))
+            questionary.press_any_key_to_continue().ask()
+            return
+    except FileNotFoundError:
+        console.print(t('wg_error_no_interfaces'))
+        questionary.press_any_key_to_continue().ask()
+        return
+
+    interface = questionary.select(t('wg_prompt_select_interface'), choices=interfaces).ask()
+    if not interface: return
+
+    while True:
+        action = questionary.select(t('wg_manage_title'), choices=[t('wg_menu_list_clients'), t('wg_menu_add_client'), t('wg_menu_remove_client'), t('back')]).ask()
+        if action == t('wg_menu_list_clients'): list_wireguard_clients(interface)
+        elif action == t('wg_menu_add_client'): add_wireguard_client(interface)
+        elif action == t('wg_menu_remove_client'): remove_wireguard_client(interface)
+        else: break
+
+def manage_webmin():
+    service_name = "webmin"
+    while True:
+        console.clear()
+        ip_address = run_command_for_output("hostname -I | awk '{print $1}'").strip()
+        status_output = run_command_for_output(f"sudo systemctl status {service_name} || true")
+
+        status_label = f"Status: [red]{t('status_unknown')}[/red]"
+        if "Active: active (running)" in status_output:
+            status_label = f"Status: [green]{t('status_active')}[/green]"
+        elif "Active: inactive (dead)" in status_output:
+            status_label = f"Status: [red]{t('status_inactive')}[/red]"
+        elif "Active: failed" in status_output:
+            status_label = f"Status: [bold red]{t('status_failed')}[/bold red]"
+
+        header = f"[bold]{t('webmin_manage_title', default='Webmin Management')}[/bold]\n"
+        header += f"{t('webmin_access_url', default='Access URL: https://{ip}:10000', ip=ip_address)}\n"
+        header += status_label
+        
+        console.print(Panel(header, style="blue"))
+
+        choices = [
+            t('service_menu_start'),
+            t('service_menu_stop'),
+            t('service_menu_restart'),
+            t('service_menu_status'),
+            t('back')
+        ]
+        action = questionary.select(t('prompt_action'), choices=choices).ask()
+
+        if action is None or action == t('back'):
+            break
+
+        cmd_map = {
+            t('service_menu_start'): "start",
+            t('service_menu_stop'): "stop",
+            t('service_menu_restart'): "restart",
+            t('service_menu_status'): "status"
+        }
+        command = cmd_map.get(action)
+
+        if command:
+            console.clear()
+            run_command(f"sudo systemctl {command} {service_name}", show_output=True)
+            questionary.press_any_key_to_continue().ask()
+
+def install_webmin_wizard(package_name):
+    """A guided wizard for installing Webmin."""
+    console.clear()
+    console.print(Panel(t('webmin_install_wizard_title', default="Webmin Installation Wizard"), style="bold blue"))
+    
+    if not questionary.confirm(t('webmin_install_prompt', default="This will download and run the official Webmin repository setup script. This is required for installation. Continue?")).ask():
+        return
+
+    setup_script_url = "https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh"
+    setup_script_path = "setup-repos.sh"
+
+    try:
+        with console.status(t('webmin_downloading_script', default="Downloading setup script...")):
+            run_command(f"curl -o {setup_script_path} {setup_script_url}")
+
+        # The script uses sudo internally, so we run it as the current user
+        with console.status(t('webmin_running_script', default="Running repository setup script (may ask for password)...")):
+            run_command_live(f"sh {setup_script_path}")
+        
+        console.print(f"[{'green'}]✔[/green] {t('repo_setup_success', default='Repository setup complete.')}")
+
+        # Now, use the generic service_install to install from the new repo
+        service_install(package_name)
+
+        ip_address = run_command_for_output("hostname -I | awk '{print $1}'").strip()
+        console.print(Panel(t('webmin_access_info', default="Webmin installed successfully!\nAccess it at: https://{ip}:10000", ip=ip_address), style="green"))
+
+    except Exception as e:
+        console.print(f"[red]{t('error_during_installation', default='An error occurred:')} {e}[/red]")
+    finally:
+        # Clean up the script
+        if os.path.exists(setup_script_path):
+            with console.status(t('webmin_cleaning_up', default="Cleaning up...")):
+                os.remove(setup_script_path)
+    
+    questionary.press_any_key_to_continue().ask()
+
 def install_nextcloud_wizard(package_name):
     """A guided wizard for installing Nextcloud."""
     console.print(Panel(f"[bold blue]{t('nextcloud_wizard_title')}[/bold blue]", border_style="blue"))
@@ -330,6 +605,18 @@ SOFTWARE_CATALOG = {
     "Fail2ban": {
         "check": "fail2ban-client", "install": service_install, "manage": manage_fail2ban, "package_name": "fail2ban",
         "version_cmd": "fail2ban-client --version | awk '{print $1}'"
+    },
+    "Webmin": {
+        "check": "/etc/webmin",
+        "install": install_webmin_wizard,
+        "remove": service_uninstall,
+        "manage": manage_webmin,
+        "package_name": "webmin",
+        "version_cmd": "cat /etc/webmin/version 2>/dev/null || echo 'N/A'"
+    },
+    "WireGuard": {
+        "check": "wg", "install": service_install, "manage": manage_wireguard, "package_name": "wireguard-tools",
+        "version_cmd": "wg --version | awk '{print $2}'"
     },
     "Docker Compose": {
         "check": "docker-compose", "install": service_install, "manage": None, # Managed via Docker module

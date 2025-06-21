@@ -54,6 +54,41 @@ def get_local_version():
         return None
     return None
 
+def get_latest_changelog_notes(full_changelog, new_version):
+    """Parses the full changelog to extract notes for the latest version."""
+    if not full_changelog:
+        return None
+    
+    # Regex to find version headers like "## [1.2.3]" or "## 2.3.4"
+    version_headers = list(re.finditer(r"^##\s*\[?(\d+\.\d+\.\d+(\.\d+)*)\]?", full_changelog, re.MULTILINE))
+    
+    if not version_headers:
+        # If no standard version headers are found, return the whole log as a fallback.
+        return full_changelog
+
+    # Find the start of the notes for the *new* version
+    latest_version_start_index = -1
+    for match in version_headers:
+        if match.group(1) == new_version:
+            latest_version_start_index = match.start()
+            break
+            
+    if latest_version_start_index == -1:
+        # If the new version isn't in the changelog yet, maybe just show the top.
+        # This is a safe fallback.
+        first_header = version_headers[0]
+        second_header_start = version_headers[1].start() if len(version_headers) > 1 else len(full_changelog)
+        return full_changelog[first_header.start():second_header_start].strip()
+
+    # Find where the next section (previous version) begins
+    next_section_start_index = len(full_changelog) # Default to end of file
+    for match in version_headers:
+        if match.start() > latest_version_start_index:
+            next_section_start_index = match.start()
+            break
+            
+    return full_changelog[latest_version_start_index:next_section_start_index].strip()
+
 def get_changelog():
     """Fetches the CHANGELOG.md file from GitHub via API using curl."""
     return get_remote_file_content_with_curl("CHANGELOG.md")
@@ -91,9 +126,10 @@ def check_for_updates(on_startup=False):
     if is_update_available:
         console.print(Panel(t('updater_new_version_found', version=remote_v), style="bold green"))
 
-        changelog = get_changelog()
-        if changelog:
-            console.print(Panel(Markdown(changelog), title=t('updater_changelog_title'), border_style="cyan"))
+        full_changelog = get_changelog()
+        if full_changelog:
+            latest_notes = get_latest_changelog_notes(full_changelog, remote_v)
+            console.print(Panel(Markdown(latest_notes), title=t('updater_changelog_title'), border_style="cyan"))
         else:
             console.print(f"[yellow]{t('updater_changelog_error')}[/yellow]")
 

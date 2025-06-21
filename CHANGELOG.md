@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.3] - 2025-06-24
+
+### Added
+- **Software Manager**:
+    - Added comprehensive management for **Webmin**. Includes a guided installer that sets up the official repository, an uninstaller, and a management menu to control the `webmin` service and view the access URL.
+
+### Changed
+- **Major Refactor (Services & Software)**:
+    - **WireGuard** management has been logically moved from the "Service Manager" to the "Software Manager" for better consistency.
+    - The "Service Manager" module has been simplified. It no longer contains specific application logic and now serves as a general-purpose viewer for the status of all `systemd` services, providing a clearer, more focused utility.
+- **Updater**:
+    - The update checker has been significantly improved. It now parses the `CHANGELOG.md` and displays only the notes for the latest available version, rather than showing the entire file. This makes update information much more concise and user-friendly.
+
 ## [2.2.2] - 2025-06-23
 
 ### Added
