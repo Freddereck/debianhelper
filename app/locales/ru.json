@@ -167,6 +167,18 @@
     "nextcloud_wizard_title": "Мастер установки Nextcloud",
     "feature_not_implemented_yet": "Эта функция еще не реализована. Следите за обновлениями!",
 
+    "devtools_menu_nodejs": "Управление Node.js и PM2",
+    "nvm_not_installed": "NVM (Node Version Manager) не установлен.",
+    "nvm_not_found_prompt": "NVM не найден. Он необходим для управления версиями Node.js.",
+    "nvm_install": "Установить NVM",
+    "nvm_installing": "Установка NVM...",
+    "nvm_install_finished": "NVM был установлен.",
+    "nvm_restart_prompt": "Пожалуйста, перезапустите терминал или выполните 'source ~/.bashrc', чтобы изменения вступили в силу.",
+    "nodejs_install_version": "Установить версию Node.js",
+    "nodejs_prompt_version": "Введите версию Node.js для установки (например, 18.12.1, lts/hydrogen):",
+    "nodejs_list_versions": "Показать установленные версии Node.js",
+    "pm2_install_update": "Установить / Обновить PM2",
+
     "java_installer_title": "Установщик Java (OpenJDK)",
     "java_prompt_which_version": "Какую версию Java вы хотите установить?",
     "java_menu_cancel": "Отмена",

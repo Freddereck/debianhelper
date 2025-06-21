@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.2] - 2025-06-23
+
+### Added
+- **Developer Tools**:
+    - The "Developer Tools" module has been significantly enhanced.
+    - Added a comprehensive manager for **Node.js** using **NVM** (Node Version Manager).
+    - The panel can now install NVM if it's not present.
+    - Implemented features to install different Node.js versions and list installed versions.
+    - Added a direct option to install or update **PM2** globally via NPM within the Node.js manager.
+- **Software Manager Features**:
+    - **Nginx**: Added a feature to list all configured sites from `/etc/nginx/sites-enabled`.
+    - **MySQL & PostgreSQL**: Added the ability to list all databases.
+    - **Certbot**: Added a feature to list all existing SSL certificates.
+    - **Fail2Ban**: Added full management support, including listing jails, checking status, and a utility to unban IP addresses.
+    - **Docker Compose**: Added installation support for Docker Compose.
+- **Docker Module**:
+    - Integrated **Docker Compose** management directly into the Docker module.
+    - Users can now point to a project directory and run `up`, `down`, `ps`, and `logs` commands on a `docker-compose.yml` file.
+- **Nextcloud**: Laid the groundwork for a future "Nextcloud Installation Wizard" with a placeholder menu item.
+
+### Changed
+- **UI/UX**:
+    - The Software Manager menu is now more informative. It displays `[Manage]` or `[Install]` prefixes for clarity.
+    - For installed software, the panel now attempts to detect and display the current version number (e.g., `Nginx (v1.18.0)`).
+- **Code Structure**: The "Developer Tools" module is now the dedicated home for managing development environments like Node.js and Java.
+
+### Fixed
+- **3X-UI Detection**: Corrected the file path used to check for an existing 3X-UI installation, ensuring more reliable detection. Added a command to fetch its version.
+
 ## [2.2.1] - 2025-06-22
 
 ### Added

@@ -116,6 +116,18 @@
     "nextcloud_wizard_title": "Nextcloud Installation Wizard",
     "feature_not_implemented_yet": "This feature is not yet implemented. Stay tuned!",
 
+    "devtools_menu_nodejs": "Manage Node.js & PM2",
+    "nvm_not_installed": "NVM (Node Version Manager) is not installed.",
+    "nvm_not_found_prompt": "NVM not found. It is required for managing Node.js versions.",
+    "nvm_install": "Install NVM",
+    "nvm_installing": "Installing NVM",
+    "nvm_install_finished": "NVM has been installed.",
+    "nvm_restart_prompt": "Please restart your terminal session or run 'source ~/.bashrc' for the changes to take effect.",
+    "nodejs_install_version": "Install Node.js version",
+    "nodejs_prompt_version": "Enter the Node.js version to install (e.g., 18.12.1, lts/hydrogen):",
+    "nodejs_list_versions": "List installed Node.js versions",
+    "pm2_install_update": "Install / Update PM2",
+
     "menu_software_manager": "Software Manager",
     "software_manager_title": "Software Manager",
     "software_manager_prompt": "Select software to install or manage:",
