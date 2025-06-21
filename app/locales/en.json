@@ -128,6 +128,20 @@
     "nodejs_list_versions": "List installed Node.js versions",
     "pm2_install_update": "Install / Update PM2",
 
+    "gathering_versions_status": "Gathering software versions...",
+    
+    "devtools_menu_python": "Manage Python",
+    "pyenv_not_found_prompt": "pyenv not found. It is required for managing Python versions.",
+    "pyenv_install": "Install pyenv",
+    "pyenv_installing": "Installing pyenv and its build dependencies...",
+    "pyenv_install_finished": "pyenv has been installed.",
+    "pyenv_restart_prompt": "Please restart your terminal session for the shell environment changes to take effect.",
+    "python_install_version": "Install Python version",
+    "python_prompt_version": "Enter the Python version to install (e.g., 3.12.3):",
+    "python_list_versions": "List installed Python versions",
+    "python_installing_version": "Installing Python {version}. This may take a long time...",
+    "python_install_warning": "Compiling Python from source is a lengthy process. Please be patient.",
+
     "menu_software_manager": "Software Manager",
     "software_manager_title": "Software Manager",
     "software_manager_prompt": "Select software to install or manage:",

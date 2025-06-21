@@ -193,6 +193,9 @@ def manage_certbot():
             questionary.press_any_key_to_continue().ask()
         elif action == t('uninstall'): 
             service_uninstall('certbot python3-certbot-nginx')
+        
+        if action != t('back'):
+            questionary.press_any_key_to_continue().ask()
 
 def manage_fail2ban():
     while True:
@@ -356,28 +359,29 @@ def show_software_manager():
         choices = []
         raw_choices_map = {} # To map styled string back to simple name
         
-        for name, software in SOFTWARE_CATALOG.items():
-            check_path = software["check"]
-            # Check if it's a path or a command
-            if "/" in check_path:
-                installed = os.path.exists(check_path)
-            else:
-                installed = is_tool_installed(check_path)
-            
-            if installed:
-                version_str = ""
-                if software.get("version_cmd"):
-                    version = run_command_for_output(software["version_cmd"])
-                    if version:
-                        version_str = f" (v{version.strip()})"
+        with console.status(f"[yellow]{t('gathering_versions_status')}[/yellow]"):
+            for name, software in SOFTWARE_CATALOG.items():
+                check_path = software["check"]
+                # Check if it's a path or a command
+                if "/" in check_path:
+                    installed = os.path.exists(check_path)
+                else:
+                    installed = is_tool_installed(check_path)
                 
-                display_text = f"[{t('manage')}] {name}{version_str}"
-                choices.append(display_text)
-                raw_choices_map[display_text] = f"manage {name}"
-            else:
-                display_text = f"[{t('install')}] {name}"
-                choices.append(display_text)
-                raw_choices_map[display_text] = f"install {name}"
+                if installed:
+                    version_str = ""
+                    if software.get("version_cmd"):
+                        version = run_command_for_output(software["version_cmd"])
+                        if version:
+                            version_str = f" (v{version.strip()})"
+                    
+                    display_text = f"[{t('manage')}] {name}{version_str}"
+                    choices.append(display_text)
+                    raw_choices_map[display_text] = f"manage {name}"
+                else:
+                    display_text = f"[{t('install')}] {name}"
+                    choices.append(display_text)
+                    raw_choices_map[display_text] = f"install {name}"
         
         choices.append(t('back'))
         

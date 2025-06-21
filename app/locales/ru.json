@@ -179,6 +179,20 @@
     "nodejs_list_versions": "Показать установленные версии Node.js",
     "pm2_install_update": "Установить / Обновить PM2",
 
+    "gathering_versions_status": "Сбор версий программного обеспечения...",
+
+    "devtools_menu_python": "Управление Python",
+    "pyenv_not_found_prompt": "pyenv не найден. Он необходим для управления версиями Python.",
+    "pyenv_install": "Установить pyenv",
+    "pyenv_installing": "Установка pyenv и его зависимостей для сборки...",
+    "pyenv_install_finished": "pyenv был установлен.",
+    "pyenv_restart_prompt": "Пожалуйста, перезапустите терминал, чтобы изменения окружения оболочки вступили в силу.",
+    "python_install_version": "Установить версию Python",
+    "python_prompt_version": "Введите версию Python для установки (например, 3.12.3):",
+    "python_list_versions": "Показать установленные версии Python",
+    "python_installing_version": "Установка Python {version}. Это может занять много времени...",
+    "python_install_warning": "Компиляция Python из исходного кода - длительный процесс. Пожалуйста, будьте терпеливы.",
+
     "java_installer_title": "Установщик Java (OpenJDK)",
     "java_prompt_which_version": "Какую версию Java вы хотите установить?",
     "java_menu_cancel": "Отмена",
