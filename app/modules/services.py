@@ -21,7 +21,6 @@ COMMON_SERVICES = [
     "mysql", "mariadb", "postgresql",
     "docker", "containerd",
     "fail2ban",
-    "ufw", "firewalld",
     "systemd-journald", "rsyslog",
     "network-manager", "systemd-networkd",
     "wg-quick@wg0" # Example for a common WireGuard service name

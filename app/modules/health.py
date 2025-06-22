@@ -58,6 +58,45 @@ def perform_cleanup():
     
     console.print(f"\n[bold green]{t('health_cleanup_finished')}[/bold green]")
 
+def check_failed_services():
+    """Checks for any systemd services that are in a 'failed' state."""
+    console.print(f"[yellow]{t('health_checking_failed_services')}[/yellow]")
+    
+    # The command exits with a non-zero status if any failed units are found
+    failed_raw = run_command("systemctl --failed --no-legend --no-pager", ignore_errors=True)
+    
+    if not failed_raw.strip():
+        console.print(f"[green]{t('health_no_failed_services')}[/green]")
+        return
+
+    failed_services = [line.split()[0] for line in failed_raw.strip().split('\n')]
+    
+    table = Table(title=t('health_failed_services_list'))
+    table.add_column("Unit", style="red")
+    for service in failed_services:
+        table.add_row(service)
+    console.print(table)
+
+    if questionary.confirm(t('health_restart_failed_prompt')).ask():
+        for service in failed_services:
+            console.print(t('health_restarting_service', service=service))
+            run_command(f"sudo systemctl restart {service}")
+        console.print(f"[bold green]{t('health_restart_attempt_finished')}[/bold green]")
+
+def analyze_system_logs():
+    """Analyzes system logs for recent critical errors."""
+    console.print(f"[yellow]{t('health_analyzing_logs')}[/yellow]")
+    
+    # journalctl -p err means priority 'error' and higher
+    # --since "1 day ago" gets recent logs. -n 50 limits the output.
+    log_output = run_command('journalctl -p err -n 50 --since "1 day ago" --no-pager')
+    
+    if not log_output.strip():
+        console.print(f"[green]{t('health_no_critical_logs')}[/green]")
+        return
+        
+    console.print(Panel(log_output, title=t('health_critical_logs_found'), border_style="bold red"))
+
 def run_system_health_check():
     """Main menu for the system health check module."""
     while True:
@@ -69,6 +108,8 @@ def run_system_health_check():
             choices=[
                 t('health_menu_check_updates'),
                 t('health_menu_cleanup'),
+                t('health_menu_check_failed'),
+                t('health_menu_analyze_logs'),
                 t('health_menu_back')
             ]
         ).ask()
@@ -79,6 +120,14 @@ def run_system_health_check():
             input()
         elif choice == t('health_menu_cleanup'):
             perform_cleanup()
+            console.print(f"\n[cyan]{t('health_press_enter')}[/cyan]")
+            input()
+        elif choice == t('health_menu_check_failed'):
+            check_failed_services()
+            console.print(f"\n[cyan]{t('health_press_enter')}[/cyan]")
+            input()
+        elif choice == t('health_menu_analyze_logs'):
+            analyze_system_logs()
             console.print(f"\n[cyan]{t('health_press_enter')}[/cyan]")
             input()
         elif choice == t('health_menu_back') or choice is None:

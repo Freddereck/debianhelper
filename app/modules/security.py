@@ -10,6 +10,10 @@ from app.translations import t
 
 console = Console()
 
+def is_tool_installed(name):
+    """Checks if a tool is installed."""
+    return run_command(f"command -v {name}") != ""
+
 # --- Quick Checks ---
 
 def check_ssh_config():
@@ -103,6 +107,38 @@ def check_critical_permissions():
     console.print(table)
     questionary.press_any_key_to_continue().ask()
 
+def check_world_writable_files():
+    """Finds world-writable files in common system directories."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+    console.print(Panel(f"[bold yellow]{t('world_writable_title')}[/bold yellow]"))
+    
+    search_paths = ["/etc", "/var", "/usr/local/bin", "/usr/local/sbin", "/bin", "/sbin"]
+    all_found_files = []
+
+    with console.status(t('world_writable_searching')) as status:
+        for path in search_paths:
+            status.update(t('world_writable_searching_in', path=path))
+            # -xdev: don't cross device boundaries (like /proc)
+            # -type f: only files
+            # -perm -o+w: file is writable by "others"
+            command = f"sudo find {path} -xdev -type f -perm -o+w"
+            found = run_command(command, ignore_errors=True)
+            if found.strip():
+                all_found_files.extend(found.strip().split('\n'))
+
+    if all_found_files:
+        console.print(f"[bold red]{t('world_writable_found')}[/bold red]")
+        table = Table(title=t('world_writable_table_title'))
+        table.add_column(t('world_writable_col_file'), style="red")
+        for f in all_found_files:
+            table.add_row(f)
+        console.print(table)
+        console.print(f"\n[yellow]{t('world_writable_recommendation')}[/yellow]")
+    else:
+        console.print(f"[green]{t('world_writable_not_found')}[/green]")
+        
+    questionary.press_any_key_to_continue().ask()
+
 # --- Network Audit ---
 
 def check_fail2ban():
@@ -111,7 +147,8 @@ def check_fail2ban():
     console.print(Panel(f"[bold yellow]{t('fail2ban_title')}[/bold yellow]"))
     console.print(t('fail2ban_checking'))
     
-    status = run_command("sudo systemctl is-active fail2ban")
+    status = run_command("sudo systemctl is-active fail2ban").strip()
+    
     if status == "active":
         console.print(f"[green]{t('fail2ban_active')}[/green]")
         status_all = run_command("sudo fail2ban-client status")
@@ -129,6 +166,18 @@ def check_fail2ban():
             console.print(f"[yellow]{t('fail2ban_no_jails')}[/yellow]")
     else:
         console.print(f"[red]{t('fail2ban_inactive')}[/red]")
+        # Check if the service has failed
+        status_load = run_command("sudo systemctl status fail2ban").strip()
+        if 'failed' in status_load:
+            console.print(f"[yellow]{t('fail2ban_failed_attempt_restart')}[/yellow]")
+            run_command("sudo systemctl restart fail2ban")
+            # Check status again
+            new_status = run_command("sudo systemctl is-active fail2ban").strip()
+            if new_status == "active":
+                console.print(f"[green]{t('fail2ban_restart_success')}[/green]")
+            else:
+                console.print(f"[bold red]{t('fail2ban_restart_failed')}[/bold red]")
+
     questionary.press_any_key_to_continue().ask()
 
 def check_listening_ports():
@@ -159,17 +208,46 @@ def check_listening_ports():
 
 def run_lynis_audit():
     """Runs the Lynis security audit."""
-    if not is_lynis_installed():
-        install_lynis()
+    if not is_tool_installed('lynis'):
+        if questionary.confirm(t('security_lynis_not_installed')).ask():
+            console.print(t('security_lynis_installing'))
+            run_command_live("sudo apt-get install -y lynis", "lynis_install.log")
+        else:
+            return
 
-    if is_lynis_installed():
+    if is_tool_installed('lynis'):
         console.print(Panel(t('security_lynis_running_panel')))
-        with console.status(t('security_lynis_running_status')):
-            # We want to see the output, so show_output=True, but we handle the messages manually
-            run_command("sudo lynis audit system", show_output=True, ignore_errors=True)
+        # We need to run this live to see the output
+        run_command_live("sudo lynis audit system", "lynis_audit.log")
         console.print(f"\n[green]{t('security_lynis_completed')}[/green]")
     else:
         console.print(f"[red]{t('security_lynis_install_failed')}[/red]")
+    
+    questionary.press_any_key_to_continue().ask()
+
+def run_rkhunter_audit():
+    """Runs the rkhunter rootkit scanner."""
+    if not is_tool_installed('rkhunter'):
+        if questionary.confirm(t('security_rkhunter_not_installed')).ask():
+            console.print(t('security_rkhunter_installing'))
+            run_command_live("sudo apt-get install -y rkhunter", "rkhunter_install.log")
+        else:
+            return
+
+    if is_tool_installed('rkhunter'):
+        console.print(Panel(t('security_rkhunter_running_panel')))
+        # --update: update data files
+        # --propupd: create baseline file properties
+        # -c: run check
+        # --sk: skip keypress
+        console.print(t('security_rkhunter_updating_db'))
+        run_command_live("sudo rkhunter --update", "rkhunter_update.log")
+        console.print(t('security_rkhunter_running_scan'))
+        run_command_live("sudo rkhunter -c --sk", "rkhunter_scan.log")
+        console.print(f"\n[green]{t('security_rkhunter_completed')}[/green]")
+        console.print(f"\n[yellow]{t('security_rkhunter_log_location')}[/yellow]")
+    else:
+        console.print(f"[red]{t('security_rkhunter_install_failed')}[/red]")
     
     questionary.press_any_key_to_continue().ask()
 
@@ -186,6 +264,7 @@ def show_quick_checks_menu():
                 t('quick_check_ssh'),
                 t('quick_check_passwords'),
                 t('quick_check_permissions'),
+                t('quick_check_world_writable'),
                 t('security_menu_back')
             ]
         ).ask()
@@ -196,6 +275,8 @@ def show_quick_checks_menu():
             check_empty_passwords()
         elif choice == t('quick_check_permissions'):
             check_critical_permissions()
+        elif choice == t('quick_check_world_writable'):
+            check_world_writable_files()
         elif choice == t('security_menu_back') or choice is None:
             break
 
@@ -231,7 +312,8 @@ def run_security_audit():
             choices=[
                 t('security_menu_quick'),
                 t('security_menu_network'),
-                t('security_menu_deep'),
+                t('security_menu_deep_lynis'),
+                t('security_menu_deep_rkhunter'),
                 t('security_menu_back')
             ]
         ).ask()
@@ -240,7 +322,9 @@ def run_security_audit():
             show_quick_checks_menu()
         elif choice == t('security_menu_network'):
             show_network_audit_menu()
-        elif choice == t('security_menu_deep'):
+        elif choice == t('security_menu_deep_lynis'):
             run_lynis_audit()
+        elif choice == t('security_menu_deep_rkhunter'):
+            run_rkhunter_audit()
         elif choice == t('security_menu_back') or choice is None:
             break 

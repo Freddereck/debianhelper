@@ -25,7 +25,7 @@ from app.modules.backup import show_backup_manager
 from app.utils import is_tool_installed
 
 # Version of the application
-__version__ = "2.3.2"
+__version__ = "2.3.3"
 
 console = Console()
 
