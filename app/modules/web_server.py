@@ -191,33 +191,30 @@ def create_nginx_nextjs_site():
 
     web_root = f"/var/www/{project_name}"
 
-    # Step 3: Create Next.js app
+    # Step 3: Create Next.js app and set permissions
     console.print(f"[cyan]{t('creating_nextjs_app', path=web_root)}[/cyan]")
     try:
-        # Use npx to create the app non-interactively
-        # Note: This assumes user is running script with a user that has write permissions to /var/www or is using sudo
-        # A better approach would be to create in user's home dir and then move with sudo.
-        # For now, let's assume /var/www is prepared.
+        # Create app as current user in its directory
         run_command(f"sudo mkdir -p {web_root}")
         run_command(f"sudo chown -R $USER:$USER {web_root}") # Temporarily own to create app
-        run_command(f"npx --yes create-next-app@latest {web_root} --ts --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm --yes")
+        run_command(f"npx --yes create-next-app@latest {web_root} --ts --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm")
         console.print(f"[green]{t('nextjs_app_created_successfully')}[/green]")
+        
+        # Change ownership to www-data before installing dependencies and running the app
+        run_command(f"sudo chown -R www-data:www-data {web_root}")
     except Exception as e:
         console.print(f"[red]{t('error_creating_nextjs_app', error=e)}[/red]")
         return
 
-    # Step 4: Build and start with PM2
+    # Step 4: Build and start with PM2 as www-data user
     try:
         console.print(f"[cyan]{t('building_nextjs_app')}[/cyan]")
-        run_command(f"cd {web_root} && npm install && npm run build")
+        run_command(f"sudo -u www-data bash -c 'cd {web_root} && npm install && npm run build'")
         
         console.print(f"[cyan]{t('starting_app_with_pm2')}[/cyan]")
-        run_command(f"cd {web_root} && pm2 start npm --name '{project_name}' -- start -p {port}")
-        run_command("pm2 save")
+        run_command(f"sudo -u www-data bash -c \"cd {web_root} && PORT={port} pm2 start npm --name '{project_name}' -- start\"")
+        run_command("sudo -u www-data pm2 save")
         
-        # Set permissions back to www-data for web server access
-        run_command(f"sudo chown -R www-data:www-data {web_root}")
-
     except Exception as e:
         console.print(f"[red]{t('error_building_or_starting_app', error=e)}[/red]")
         return
@@ -261,7 +258,7 @@ server {{
         ask_and_install_ssl(domain, 'nginx')
     except Exception as e:
         console.print(f"[red]{t('error_reloading_nginx', error=e)}[/red]")
-        return 
+        return
 
 def create_apache_nextjs_site():
     """Guides the user through creating and deploying a Next.js site with Apache."""
