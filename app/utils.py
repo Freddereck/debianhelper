@@ -10,16 +10,16 @@ from rich.console import Console
 
 console = Console()
 
-def run_command(command, show_output=True, success_message=None, error_message=None, ignore_errors=False):
+def run_command(command, show_output=False, ignore_errors=False):
     """
-    Runs a command and optionally displays its output.
-    Returns the process return code.
+    Runs a command and captures its output.
+    Returns the command's stdout as a string.
     """
     try:
         process = subprocess.run(
             command,
             shell=True,
-            check=not ignore_errors, # check=True will raise CalledProcessError on non-zero exit codes
+            check=not ignore_errors,
             capture_output=True,
             text=True,
             encoding='utf-8'
@@ -29,25 +29,19 @@ def run_command(command, show_output=True, success_message=None, error_message=N
                 console.print(process.stdout)
             if process.stderr:
                 console.print(f"[yellow]{process.stderr}[/yellow]")
-
-        if success_message:
-            console.print(f"[green]{success_message}[/green]")
         
-        return process.returncode
+        return process.stdout
 
     except subprocess.CalledProcessError as e:
-        if error_message:
-            console.print(f"[bold red]{error_message}[/bold red]")
         if show_output:
-            # Even on error, we might want to see what happened.
             if e.stdout:
                 console.print(e.stdout)
             if e.stderr:
                 console.print(f"[red]{e.stderr}[/red]")
-        return e.returncode
+        return e.stdout if e.stdout else ""
     except FileNotFoundError:
         console.print(f"[bold red]Error: Command not found: {command.split()[0]}[/bold red]")
-        return -1
+        return ""
 
 def run_command_live(command, log_filename):
     """Executes a command with live output and saves it to a log file."""

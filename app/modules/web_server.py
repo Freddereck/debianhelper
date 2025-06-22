@@ -121,9 +121,32 @@ def create_nginx_static_site():
     console.print(t('creating_web_root', path=web_root))
     try:
         run_command(f"sudo mkdir -p {web_root}")
-        # Create a simple index file
-        run_command(f"echo '<h1>Welcome to {domain}</h1>' | sudo tee {web_root}/index.html")
-        # Set permissions
+        # Create a more descriptive index file
+        index_html_content = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to {domain}</title>
+    <style>
+        body {{ font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; margin: 0; }}
+        .container {{ text-align: center; padding: 40px; background-color: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }}
+        h1 {{ color: #333; }}
+        p {{ color: #555; }}
+        .footer {{ margin-top: 20px; font-size: 0.8em; color: #888; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Site Created Successfully! 🚀</h1>
+        <p>Your new site for <strong>{domain}</strong> is ready and waiting for your content.</p>
+        <p class="footer">Managed by Server Panel.</p>
+    </div>
+</body>
+</html>
+"""
+        run_command(f"echo '{index_html_content}' | sudo tee {web_root}/index.html > /dev/null")
         run_command(f"sudo chown -R www-data:www-data {web_root}")
         console.print(f"[green]{t('directory_created_successfully')}[/green]")
     except Exception as e:
@@ -183,7 +206,31 @@ def create_apache_static_site():
     console.print(t('creating_web_root', path=web_root))
     try:
         run_command(f"sudo mkdir -p {web_root}")
-        run_command(f"echo '<h1>Welcome to {domain} on Apache!</h1>' | sudo tee {web_root}/index.html")
+        index_html_content = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to {domain}</title>
+    <style>
+        body {{ font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; margin: 0; }}
+        .container {{ text-align: center; padding: 40px; background-color: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }}
+        h1 {{ color: #333; }}
+        p {{ color: #555; }}
+        .footer {{ margin-top: 20px; font-size: 0.8em; color: #888; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Site Created Successfully! 🚀</h1>
+        <p>Your new site for <strong>{domain}</strong> is ready and waiting for your content.</p>
+        <p class="footer">Managed by Server Panel.</p>
+    </div>
+</body>
+</html>
+"""
+        run_command(f"echo '{index_html_content}' | sudo tee {web_root}/index.html > /dev/null")
         run_command(f"sudo chown -R www-data:www-data {web_root}")
         console.print(f"[green]{t('directory_created_successfully')}[/green]")
     except Exception as e:

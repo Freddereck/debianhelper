@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from app.utils import run_command, run_command_live
+from app.utils import run_command, run_command_for_output, run_command_live
 from app.translations import t
 
 console = Console()
@@ -63,9 +63,9 @@ def check_failed_services():
     console.print(f"[yellow]{t('health_checking_failed_services')}[/yellow]")
     
     # The command exits with a non-zero status if any failed units are found
-    failed_raw = run_command("systemctl --failed --no-legend --no-pager", ignore_errors=True)
+    failed_raw = run_command_for_output("systemctl --failed --no-legend --no-pager")
     
-    if not failed_raw.strip():
+    if not failed_raw:
         console.print(f"[green]{t('health_no_failed_services')}[/green]")
         return
 
@@ -89,9 +89,9 @@ def analyze_system_logs():
     
     # journalctl -p err means priority 'error' and higher
     # --since "1 day ago" gets recent logs. -n 50 limits the output.
-    log_output = run_command('journalctl -p err -n 50 --since "1 day ago" --no-pager')
+    log_output = run_command_for_output('journalctl -p err -n 50 --since "1 day ago" --no-pager')
     
-    if not log_output.strip():
+    if not log_output:
         console.print(f"[green]{t('health_no_critical_logs')}[/green]")
         return
         
