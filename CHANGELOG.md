@@ -1,5 +1,12 @@
 # Журнал изменений
 
+## [2.5.0] - 2024-07-26
+
+### ✨ Added
+- **Autostart Manager**: Added a new module (`app/modules/autostart.py`) to manage systemd services that start on boot.
+  - Users can now list all enabled startup services.
+  - Users can enable or disable services from starting automatically.
+
 ## [2.4.0] - 2024-06-25
 ### Добавлено
 - **Проверка работоспособности системы**:

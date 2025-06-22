@@ -751,5 +751,24 @@
     "backup_dir_not_found": "Backup directory not found: {dir}",
     "no_backups_found": "No backups found in {dir}.",
     "backups_in_dir": "Backups in {dir}",
-    "error_listing_backups": "Error listing backups: {error}"
+    "error_listing_backups": "Error listing backups: {error}",
+
+    "menu_autostart_manager": "Autostart Manager",
+    "autostart_title": "Autostart Manager",
+    "autostart_listing": "Listing enabled startup services",
+    "autostart_enabled_title": "Enabled Startup Services",
+    "autostart_col_unit": "UNIT FILE",
+    "autostart_col_state": "STATE",
+    "autostart_no_services": "No enabled startup services found.",
+    "autostart_prompt_disable": "Enter the name of the service to disable:",
+    "autostart_disabling": "Disabling {service} from autostart...",
+    "autostart_prompt_enable": "Enter the name of the service to enable:",
+    "autostart_enabling": "Enabling autostart for {service}...",
+    "autostart_menu_list": "List enabled services",
+    "autostart_menu_disable": "Disable a service from autostart",
+    "autostart_menu_enable": "Enable a service in autostart",
+
+    "health_check_title": "System Health Check",
+    "health_disk_usage": "Disk Usage",
+    "health_memory_usage": "Memory Usage"
 }

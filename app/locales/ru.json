@@ -501,7 +501,7 @@
     "wg_remove_confirm": "Вы уверены, что хотите удалить клиента {client_name}?",
     "wg_client_removed": "Клиент {client_name} и его конфигурация были удалены.",
 
-    "main_menu_title": "Панель управления сервером",
+    "main_menu_title": "Главное меню",
     "main_menu_subtitle": "Выберите действие для продолжения",
     "main_menu_prompt": "Что бы вы хотели сделать?",
     "menu_monitor": "Системный монитор",
@@ -585,7 +585,7 @@
 
     "main_menu_title": "Главное меню",
     "main_menu_subtitle": "Выберите действие для продолжения",
-    "back_to_main_menu": "Вернуться в главное меню",
+    "back_to_main_menu": "◀️ Назад в главное меню",
     "operation_cancelled": "Операция отменена.",
     "updater_title": "Обновление",
     "updater_checking": "Проверка обновлений...",
@@ -819,5 +819,20 @@
     "security_rkhunter_updating_db": "Обновление баз данных rkhunter...",
     "security_rkhunter_running_scan": "Выполнение сканирования... (Это может занять несколько минут)",
     "security_rkhunter_completed": "Сканирование rkhunter завершено.",
-    "security_rkhunter_log_location": "Проверьте файл журнала для получения результатов: /var/log/rkhunter.log"
+    "security_rkhunter_log_location": "Проверьте файл журнала для получения результатов: /var/log/rkhunter.log",
+
+    "menu_autostart_manager": "Менеджер автозапуска",
+    "autostart_title": "Менеджер автозапуска",
+    "autostart_listing": "Получение списка служб в автозапуске",
+    "autostart_enabled_title": "Службы в автозапуске",
+    "autostart_col_unit": "СЛУЖБА",
+    "autostart_col_state": "СОСТОЯНИЕ",
+    "autostart_no_services": "Включенные службы автозапуска не найдены.",
+    "autostart_prompt_disable": "Введите имя службы для отключения из автозапуска:",
+    "autostart_disabling": "Отключаю автозапуск для {service}...",
+    "autostart_prompt_enable": "Введите имя службы для добавления в автозапуск:",
+    "autostart_enabling": "Включаю автозапуск для {service}...",
+    "autostart_menu_list": "Показать службы в автозапуске",
+    "autostart_menu_disable": "Отключить службу из автозапуска",
+    "autostart_menu_enable": "Добавить службу в автозапуск"
 } 

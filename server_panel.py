@@ -22,10 +22,11 @@ from app.modules.pm2 import show_pm2_manager
 from app.modules.software_manager import show_software_manager
 from app.modules.web_server import show_web_server_manager
 from app.modules.backup import show_backup_manager
+from app.modules.autostart import show_autostart_manager
 from app.utils import is_tool_installed
 
 # Version of the application
-__version__ = "2.4.0"
+__version__ = "2.4.1"
 
 console = Console()
 
@@ -47,6 +48,7 @@ def main_menu():
         t('menu_network_info'): show_network_toolkit,
         t('menu_web_server_manager'): show_web_server_manager,
         t('menu_backup_manager'): show_backup_manager,
+        t('menu_autostart_manager'): show_autostart_manager,
     }
 
     # Conditionally add PM2 manager if installed
