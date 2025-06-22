@@ -235,95 +235,6 @@ def manage_fail2ban():
             
         questionary.press_any_key_to_continue().ask()
 
-# --- Map software names to their management functions ---
-SOFTWARE_MAP = {
-    "Nginx": {
-        "manage_func": manage_nginx,
-        "install_func": service_install,
-        "package_name": "nginx",
-        "check_tool": "nginx",
-        "version_cmd": "nginx -v 2>&1"  # Nginx prints version to stderr
-    },
-    "Apache2": {
-        "manage_func": manage_apache,
-        "install_func": service_install,
-        "package_name": "apache2",
-        "check_tool": "apache2",
-        "version_cmd": "apache2 -v"
-    },
-    "MySQL": {
-        "manage_func": manage_mysql,
-        "install_func": service_install,
-        "package_name": "mysql-server",
-        "check_tool": "mysql",
-        "version_cmd": "mysql --version"
-    },
-    "PostgreSQL": {
-        "manage_func": manage_postgresql,
-        "install_func": service_install,
-        "package_name": "postgresql",
-        "check_tool": "psql",
-        "version_cmd": "psql --version"
-    },
-    "MongoDB": {
-        "manage_func": manage_mongodb,
-        "install_func": service_install,
-        "package_name": "mongodb",
-        "check_tool": "mongod",
-        "version_cmd": "mongod --version"
-    },
-    "Redis": {
-        "manage_func": manage_redis,
-        "install_func": service_install,
-        "package_name": "redis-server",
-        "check_tool": "redis-server",
-        "version_cmd": "redis-server --version"
-    },
-    "Certbot": {
-        "manage_func": manage_certbot,
-        "install_func": service_install,
-        "package_name": "certbot python3-certbot-nginx",
-        "check_tool": "certbot",
-        "version_cmd": "certbot --version"
-    },
-    "Fail2Ban": {
-        "manage_func": manage_fail2ban,
-        "install_func": service_install,
-        "package_name": "fail2ban",
-        "check_tool": "fail2ban-client",
-        "version_cmd": "fail2ban-client --version"
-    },
-    "Webmin": {
-        "manage_func": manage_webmin,
-        "install_func": install_webmin_wizard,
-        "package_name": "webmin",
-        "check_path": "/etc/webmin"
-    },
-    "Nextcloud": {
-        "install_func": install_nextcloud_wizard,
-        "package_name": "nextcloud-server", # Wizard is a stub, but for consistency
-        "check_path": "/var/www/nextcloud"  # A common install location
-    },
-    "PHPMyAdmin": {
-        "manage_func": manage_phpmyadmin,
-        "install_func": install_phpmyadmin_managed,
-        "package_name": "phpmyadmin",
-        "check_path": "/usr/share/phpmyadmin"
-    },
-    "3X-UI": {
-        "manage_func": manage_3x_ui,
-        "install_func": install_3x_ui,
-        "package_name": "3x-ui", # For display purposes
-        "check_tool": "x-ui"
-    },
-    "WireGuard": {
-        "manage_func": manage_wireguard,
-        "install_func": service_install,
-        "package_name": "wireguard-tools",
-        "check_tool": "wg"
-    }
-}
-
 # --- WireGuard Management (Moved from services.py) ---
 
 def generate_wg_keys():
@@ -655,6 +566,95 @@ def manage_3x_ui():
     console.print(f"[cyan]{t('launching_interactive_tool', tool='x-ui')}...[/cyan]")
     os.system("x-ui")
     questionary.press_any_key_to_continue(t('press_any_key_after_exit')).ask()
+
+# --- Map software names to their management functions ---
+SOFTWARE_MAP = {
+    "Nginx": {
+        "manage_func": manage_nginx,
+        "install_func": service_install,
+        "package_name": "nginx",
+        "check_tool": "nginx",
+        "version_cmd": "nginx -v 2>&1"  # Nginx prints version to stderr
+    },
+    "Apache2": {
+        "manage_func": manage_apache,
+        "install_func": service_install,
+        "package_name": "apache2",
+        "check_tool": "apache2",
+        "version_cmd": "apache2 -v"
+    },
+    "MySQL": {
+        "manage_func": manage_mysql,
+        "install_func": service_install,
+        "package_name": "mysql-server",
+        "check_tool": "mysql",
+        "version_cmd": "mysql --version"
+    },
+    "PostgreSQL": {
+        "manage_func": manage_postgresql,
+        "install_func": service_install,
+        "package_name": "postgresql",
+        "check_tool": "psql",
+        "version_cmd": "psql --version"
+    },
+    "MongoDB": {
+        "manage_func": manage_mongodb,
+        "install_func": service_install,
+        "package_name": "mongodb",
+        "check_tool": "mongod",
+        "version_cmd": "mongod --version"
+    },
+    "Redis": {
+        "manage_func": manage_redis,
+        "install_func": service_install,
+        "package_name": "redis-server",
+        "check_tool": "redis-server",
+        "version_cmd": "redis-server --version"
+    },
+    "Certbot": {
+        "manage_func": manage_certbot,
+        "install_func": service_install,
+        "package_name": "certbot python3-certbot-nginx",
+        "check_tool": "certbot",
+        "version_cmd": "certbot --version"
+    },
+    "Fail2Ban": {
+        "manage_func": manage_fail2ban,
+        "install_func": service_install,
+        "package_name": "fail2ban",
+        "check_tool": "fail2ban-client",
+        "version_cmd": "fail2ban-client --version"
+    },
+    "Webmin": {
+        "manage_func": manage_webmin,
+        "install_func": install_webmin_wizard,
+        "package_name": "webmin",
+        "check_path": "/etc/webmin"
+    },
+    "Nextcloud": {
+        "install_func": install_nextcloud_wizard,
+        "package_name": "nextcloud-server", # Wizard is a stub, but for consistency
+        "check_path": "/var/www/nextcloud"  # A common install location
+    },
+    "PHPMyAdmin": {
+        "manage_func": manage_phpmyadmin,
+        "install_func": install_phpmyadmin_managed,
+        "package_name": "phpmyadmin",
+        "check_path": "/usr/share/phpmyadmin"
+    },
+    "3X-UI": {
+        "manage_func": manage_3x_ui,
+        "install_func": install_3x_ui,
+        "package_name": "3x-ui", # For display purposes
+        "check_tool": "x-ui"
+    },
+    "WireGuard": {
+        "manage_func": manage_wireguard,
+        "install_func": service_install,
+        "package_name": "wireguard-tools",
+        "check_tool": "wg"
+    }
+}
 
 # --- Main Software Manager ---
 
