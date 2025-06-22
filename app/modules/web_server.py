@@ -193,6 +193,11 @@ def create_site_from_git(web_server):
         console.print(f"[red]{t('operation_cancelled')}[/red]")
         return
 
+    # Sanitize the URL to remove branch/tree specifics
+    if "/tree/" in repo_url:
+        repo_url = repo_url.split("/tree/")[0]
+        console.print(t('git_url_sanitized', default="[yellow]NOTE: Sanitized Git URL to:[/yellow] {url}", url=repo_url))
+
     domain = questionary.text(t('enter_domain_name')).ask()
     if not domain:
         console.print(f"[red]{t('operation_cancelled')}[/red]")
