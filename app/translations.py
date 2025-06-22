@@ -41,9 +41,16 @@ def load_language():
             
     return lang_choice
 
-def t(key, **kwargs):
+def t(key, default=None, **kwargs):
     """
     Returns the translated string for a given key.
+    If the key is not found, returns the `default` value.
+    If no default is provided, returns the key itself.
     Replaces placeholders with values from kwargs.
     """
-    return TRANSLATIONS.get(key, key).format(**kwargs) 
+    # Use the provided default if the key is not in our translations
+    template = TRANSLATIONS.get(key)
+    if template is None:
+        template = default if default is not None else key
+
+    return template.format(**kwargs) 

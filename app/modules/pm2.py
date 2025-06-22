@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import time
+from datetime import datetime
 
 import questionary
 from rich.console import Console
@@ -37,6 +38,26 @@ def format_memory(size_bytes):
         size_bytes /= power
         n += 1
     return f"{size_bytes:.1f} {power_labels[n]}B"
+
+def format_uptime(start_timestamp_ms):
+    """Formats uptime from a start timestamp in milliseconds to a human-readable string."""
+    if not start_timestamp_ms or start_timestamp_ms == 0:
+        return "N/A"
+    
+    start_time = datetime.fromtimestamp(start_timestamp_ms / 1000)
+    uptime = datetime.now() - start_time
+
+    days = uptime.days
+    hours, remainder = divmod(uptime.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if days > 0:
+        return f"{days}d {hours}h"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    if minutes > 0:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
 
 def show_pm2_logs(process_name):
     """Displays real-time logs for a specific PM2 process."""
@@ -96,6 +117,9 @@ def show_pm2_manager():
         table.add_column("CPU", style="green")
         table.add_column("Memory", style="blue")
         table.add_column("Restarts", style="red")
+        table.add_column("Uptime", style="green")
+        table.add_column("Mode", style="blue")
+        table.add_column("User", style="yellow")
 
         if not processes:
             console.print(Panel("No processes managed by PM2.", title="Info"))
@@ -107,13 +131,20 @@ def show_pm2_manager():
                 status = info.get('status', 'N/A').capitalize()
                 color = "green" if status == "Online" else "red" if status == "Stopped" else "yellow"
                 
+                uptime = format_uptime(info.get('pm_uptime'))
+                exec_mode = info.get('exec_mode', 'N/A').replace('_mode', '').capitalize()
+                user = info.get('username', 'N/A')
+
                 table.add_row(
                     p.get('name', 'N/A'),
                     str(info.get('pm_id', 'N/A')),
                     f"[{color}]{status}[/{color}]",
                     f"{monit.get('cpu', 0)}%",
                     format_memory(monit.get('memory', 0)),
-                    str(info.get('restart_time', 0))
+                    str(info.get('restart_time', 0)),
+                    uptime,
+                    exec_mode,
+                    user
                 )
             console.print(table)
 
@@ -140,7 +171,7 @@ def show_pm2_manager():
         action_choices.append("Back")
         
         action = questionary.select(
-            f"Action for [cyan]{process_name}[/cyan]:",
+            f"Action for '{process_name}':",
             choices=action_choices,
             pointer="✅"
         ).ask()

@@ -26,7 +26,7 @@ def nvm_command(command, live=False):
     if live:
         run_command_live(full_command, "nvm_live.log")
     else:
-        run_command(full_command)
+        run_command(full_command, show_output=True)
 
 def manage_nodejs():
     """Menu for managing Node.js and PM2 via nvm."""

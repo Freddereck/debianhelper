@@ -31,21 +31,21 @@ def nginx_list_sites():
 def mysql_list_databases():
     console.print(f"[cyan]{t('mysql_listing_databases')}...[/cyan]")
     command = "sudo mysql -e 'SHOW DATABASES;'"
-    run_command(command)
+    run_command(command, show_output=True)
 
 def postgresql_list_databases():
     console.print(f"[cyan]{t('postgresql_listing_databases')}...[/cyan]")
     command = "sudo -u postgres psql -c '\\l'"
-    run_command(command)
+    run_command(command, show_output=True)
 
 def certbot_list_certificates():
     console.print(f"[cyan]{t('certbot_listing_certs')}...[/cyan]")
-    run_command("sudo certbot certificates")
+    run_command("sudo certbot certificates", show_output=True)
 
 # --- Generic Management Functions ---
 
 def service_status(service_name):
-    run_command(f"sudo systemctl status {service_name}")
+    run_command(f"sudo systemctl status {service_name}", show_output=True)
 
 def service_restart(service_name):
     run_command(f"sudo systemctl restart {service_name}", success_message=t('service_restarted_successfully', service=service_name))
@@ -87,7 +87,7 @@ def manage_nginx():
         if action == t('back') or action is None: break
         if action == t('nginx_menu_list_sites'): nginx_list_sites()
         elif action == t('nginx_menu_status'): service_status('nginx')
-        elif action == t('nginx_menu_test_config'): run_command("sudo nginx -t")
+        elif action == t('nginx_menu_test_config'): run_command("sudo nginx -t", show_output=True)
         elif action == t('nginx_menu_reload'): service_reload('nginx')
         elif action == t('nginx_menu_restart'): service_restart('nginx')
         elif action == t('uninstall'): service_uninstall('nginx')
@@ -192,7 +192,7 @@ def manage_certbot():
             questionary.press_any_key_to_continue().ask()
         elif action == t('certbot_menu_test_renewal'):
             console.print(f"[cyan]{t('certbot_testing_renewal')}...[/cyan]")
-            run_command("sudo certbot renew --dry-run")
+            run_command("sudo certbot renew --dry-run", show_output=True)
             questionary.press_any_key_to_continue().ask()
         elif action == t('uninstall'): 
             service_uninstall('certbot python3-certbot-nginx')
@@ -222,14 +222,14 @@ def manage_fail2ban():
             service_restart('fail2ban')
         elif action == t('fail2ban_menu_list_jails'):
             console.print(f"[cyan]{t('fail2ban_listing_jails')}...[/cyan]")
-            run_command("sudo fail2ban-client status")
+            run_command("sudo fail2ban-client status", show_output=True)
         elif action == t('fail2ban_menu_unban_ip'):
             jail = questionary.text(t('fail2ban_prompt_jail')).ask()
             if jail:
                 ip_address = questionary.text(t('fail2ban_prompt_ip')).ask()
                 if ip_address:
                     console.print(f"[yellow]{t('fail2ban_unbanning_ip', ip=ip_address, jail=jail)}[/yellow]")
-                    run_command(f"sudo fail2ban-client set {jail} unbanip {ip_address}")
+                    run_command(f"sudo fail2ban-client set {jail} unbanip {ip_address}", show_output=True)
         elif action == t('uninstall'):
             service_uninstall('fail2ban')
             
