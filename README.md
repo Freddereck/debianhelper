@@ -4,23 +4,30 @@
 
 Меня это тоже достало. Поэтому я накидал на коленке этот скрипт на Python. Это не какая-то навороченная панель с графиками и свистелками. Это простая менюшка прямо в твоей консоли, чтобы делать самые частые вещи, не ломая голову и пальцы. Запустил, выбрал стрелочками, нажал Enter. Всё.
 
-## Чего оно умеет?
+## Server Panel
 
-Да так, по мелочи. Но жизнь упрощает.
+A modular, console-based server administration tool written in Python.
 
-*   **Живой мониторинг системы:** Показывает в реальном времени, как там процессор, память, кто из процессов самый жадный. Типа `htop`, но попроще.
-*   **Проверка здоровья:** Тыкаешь, а оно само ищет обновления для пакетов (`apt update`), предлагает их поставить и чистит систему от мусора (`autoremove`, `clean`).
-*   **Аудит безопасности (ну, типа):**
-    *   Покажет, кого и за что забанил `fail2ban`.
-    *   Выведет список всех открытых портов, чтобы ты случайно не оставил дверь в свой сервак открытой.
-    *   Запустит аудит `lynis` и покажет, где у тебя потенциальные дыры в безопасности.
-*   **Управление Docker:** Если ты из этих модных, кто балуется контейнерами. Можно запускать, останавливать, смотреть логи и управлять образами и томами.
-*   **Менеджеры всего подряд:**
-    *   **Сервисы:** Рестарт/стоп/статус для `nginx`, `sshd` и прочих.
-    *   **Cron:** Посмотреть, добавить, удалить задачи в планировщике.
-    *   **Firewall (UFW):** Посмотреть правила, включить/выключить.
-    *   **Логи:** Удобно глянуть логи системы или конкретных сервисов.
-    *   ... и другие полезные мелочи.
+## Features
+
+- **System Health Check**: Check for APT updates and perform system cleanup.
+- **Service Manager**: Start, stop, restart, and manage systemd services.
+- **Docker Manager**: Manage Docker containers, including start, stop, logs, and system prune.
+- **Software Manager**: A centralized place to install/uninstall and manage common software like Webmin.
+- **System Monitor**: A live, `htop`-like dashboard showing CPU, RAM, Disk, and process information.
+- **Security Audit**: Manage Fail2Ban and view network connections.
+- **Developer Tools**: Quick access to install and manage development tools like MySQL.
+- **Web Server Manager**:
+  - Automatically detects and manages **Nginx** and **Apache**.
+  - **Site Creation**:
+    - Static HTML sites.
+    - PHP sites with automatic PHP-FPM configuration.
+    - Node.js sites (Next.js) with PM2 process management and reverse proxy setup.
+  - **SSL Management**:
+    - Integrated Let's Encrypt (`certbot`) support.
+    - Automatically request and install SSL certificates for any created site.
+    - Manage existing certificates (list, renew).
+- **And more...**: Includes managers for Cron jobs, logs, packages, users, firewall (UFW/iptables), PM2, and network tools.
 
 ## Как эту штуку завести?
 
@@ -54,3 +61,26 @@
 Если есть идеи, как сделать лучше, или нашёл баг — можешь написать в Issues. Может быть, я даже посмотрю, если не будет лень.
 
 Удачи. 
+
+## Installation / Usage
+
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/Freddereck/server-panel.git
+    ```
+2.  Navigate to the directory:
+    ```bash
+    cd server-panel
+    ```
+3.  Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  Run the script:
+    ```bash
+    python server_panel.py
+    ```
+It is recommended to run the script with `sudo` as many functions require root privileges.
+
+## Contributing
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change. 

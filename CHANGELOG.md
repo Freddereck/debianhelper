@@ -1,6 +1,30 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [2.3.0] - YYYY-MM-DD
+
+### Added
+- **Web Server Manager**: A major new module for web server management.
+  - Automatically detects installed servers (Nginx, Apache).
+  - Allows choosing which server to manage if both are installed.
+- **Nginx Support**:
+  - Create simple static HTML sites.
+  - Create and deploy Next.js applications with PM2 and reverse proxy.
+  - Create PHP sites with automatic PHP-FPM configuration.
+- **Apache Support**:
+  - Create simple static HTML sites.
+  - Create PHP sites with automatic PHP-FPM configuration (`proxy_fcgi`).
+  - *Next.js support for Apache is planned for a future release.*
+- **SSL Management (Let's Encrypt)**:
+  - Integrated `certbot` support.
+  - Option to request and install a free SSL certificate after creating any site.
+  - Automatic configuration of HTTPS redirection.
+  - A separate menu to list and test renewal of existing certificates.
+
+### Changed
+- Refactored the entire `web_server.py` module to be modular and support multiple web servers.
+- The main menu now conditionally shows the "Web Server Manager" option.
+
+---
 
 ## [2.2.5] - 2025-06-24
 

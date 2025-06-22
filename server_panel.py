@@ -24,7 +24,7 @@ from app.modules.web_server import show_web_server_manager
 from app.utils import is_tool_installed
 
 # Version of the application
-__version__ = "2.2.5.1"
+__version__ = "2.3.0"
 
 console = Console()
 
