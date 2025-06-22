@@ -973,5 +973,6 @@
 
     "create_new_site_title": "Создание нового сайта",
     "enter_domain_name": "Введите доменное имя (например, example.com):",
-    "creating_web_root": "Создание корневой директории сайта: {path}"
+    "creating_web_root": "Создание корневой директории сайта: {path}",
+    "invalid_action_error": "Ошибка: Недопустимое действие '{action}' для ПО '{software}'."
 } 

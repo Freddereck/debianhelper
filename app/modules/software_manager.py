@@ -237,19 +237,91 @@ def manage_fail2ban():
 
 # --- Map software names to their management functions ---
 SOFTWARE_MAP = {
-    "Nginx": {"manage_func": manage_nginx, "version_cmd": "nginx -v"},
-    "Apache2": {"manage_func": manage_apache, "version_cmd": "apache2 -v"},
-    "MySQL": {"manage_func": manage_mysql, "version_cmd": "mysql --version"},
-    "PostgreSQL": {"manage_func": manage_postgresql, "version_cmd": "psql --version"},
-    "MongoDB": {"manage_func": manage_mongodb, "version_cmd": "mongod --version"},
-    "Redis": {"manage_func": manage_redis, "version_cmd": "redis-server --version"},
-    "Docker": {"manage_func": manage_docker, "version_cmd": "docker --version"}, # Assumes manage_docker is defined elsewhere
-    "Certbot": {"manage_func": manage_certbot, "version_cmd": "certbot --version"},
-    "Fail2Ban": {"manage_func": manage_fail2ban, "version_cmd": "fail2ban-client --version"},
-    "Webmin": {"manage_func": manage_webmin, "install_func": install_webmin_wizard},
-    "Nextcloud": {"install_func": install_nextcloud_wizard}, # No simple version check/manage
-    "PHPMyAdmin": {"manage_func": manage_phpmyadmin, "install_func": install_phpmyadmin_managed},
-    "3X-UI": {"manage_func": manage_3x_ui, "install_func": install_3x_ui}
+    "Nginx": {
+        "manage_func": manage_nginx,
+        "install_func": service_install,
+        "package_name": "nginx",
+        "check_tool": "nginx",
+        "version_cmd": "nginx -v 2>&1"  # Nginx prints version to stderr
+    },
+    "Apache2": {
+        "manage_func": manage_apache,
+        "install_func": service_install,
+        "package_name": "apache2",
+        "check_tool": "apache2",
+        "version_cmd": "apache2 -v"
+    },
+    "MySQL": {
+        "manage_func": manage_mysql,
+        "install_func": service_install,
+        "package_name": "mysql-server",
+        "check_tool": "mysql",
+        "version_cmd": "mysql --version"
+    },
+    "PostgreSQL": {
+        "manage_func": manage_postgresql,
+        "install_func": service_install,
+        "package_name": "postgresql",
+        "check_tool": "psql",
+        "version_cmd": "psql --version"
+    },
+    "MongoDB": {
+        "manage_func": manage_mongodb,
+        "install_func": service_install,
+        "package_name": "mongodb",
+        "check_tool": "mongod",
+        "version_cmd": "mongod --version"
+    },
+    "Redis": {
+        "manage_func": manage_redis,
+        "install_func": service_install,
+        "package_name": "redis-server",
+        "check_tool": "redis-server",
+        "version_cmd": "redis-server --version"
+    },
+    "Certbot": {
+        "manage_func": manage_certbot,
+        "install_func": service_install,
+        "package_name": "certbot python3-certbot-nginx",
+        "check_tool": "certbot",
+        "version_cmd": "certbot --version"
+    },
+    "Fail2Ban": {
+        "manage_func": manage_fail2ban,
+        "install_func": service_install,
+        "package_name": "fail2ban",
+        "check_tool": "fail2ban-client",
+        "version_cmd": "fail2ban-client --version"
+    },
+    "Webmin": {
+        "manage_func": manage_webmin,
+        "install_func": install_webmin_wizard,
+        "package_name": "webmin",
+        "check_path": "/etc/webmin"
+    },
+    "Nextcloud": {
+        "install_func": install_nextcloud_wizard,
+        "package_name": "nextcloud-server", # Wizard is a stub, but for consistency
+        "check_path": "/var/www/nextcloud"  # A common install location
+    },
+    "PHPMyAdmin": {
+        "manage_func": manage_phpmyadmin,
+        "install_func": install_phpmyadmin_managed,
+        "package_name": "phpmyadmin",
+        "check_path": "/usr/share/phpmyadmin"
+    },
+    "3X-UI": {
+        "manage_func": manage_3x_ui,
+        "install_func": install_3x_ui,
+        "package_name": "3x-ui", # For display purposes
+        "check_tool": "x-ui"
+    },
+    "WireGuard": {
+        "manage_func": manage_wireguard,
+        "install_func": service_install,
+        "package_name": "wireguard-tools",
+        "check_tool": "wg"
+    }
 }
 
 # --- WireGuard Management (Moved from services.py) ---
@@ -597,28 +669,36 @@ def show_software_manager():
         
         with console.status(f"[yellow]{t('gathering_versions_status')}[/yellow]"):
             for name, software in SOFTWARE_MAP.items():
-                check_path = software["check"]
-                # Check if it's a path or a command
-                if "/" in check_path:
-                    installed = os.path.exists(check_path)
-                else:
-                    installed = is_tool_installed(check_path)
+                installed = False
+                if software.get("check_tool"):
+                    installed = is_tool_installed(software["check_tool"])
+                elif software.get("check_path"):
+                    installed = os.path.exists(software["check_path"])
                 
                 if installed:
-                    version_str = ""
-                    if software.get("version_cmd"):
-                        version = run_command_for_output(software["version_cmd"])
-                        if version:
-                            version_str = f" (v{version.strip()})"
-                    
-                    display_text = f"[{t('manage')}] {name}{version_str}"
-                    choices.append(display_text)
-                    raw_choices_map[display_text] = f"manage {name}"
+                    # Only show manage option if a manage function exists
+                    if software.get("manage_func"):
+                        version_str = ""
+                        if software.get("version_cmd"):
+                            # Hide errors if command fails (e.g. permission denied for version)
+                            version = run_command_for_output(f"{software['version_cmd']} 2>/dev/null")
+                            if version:
+                                # Extract version number using a more robust regex
+                                match = re.search(r'(\d[\d\.-]*\d)', version)
+                                if match:
+                                    version_str = f" (v{match.group(1)})"
+                        
+                        display_text = f"[{t('manage')}] {name}{version_str}"
+                        choices.append(display_text)
+                        raw_choices_map[display_text] = f"manage {name}"
                 else:
-                    display_text = f"[{t('install')}] {name}"
-                    choices.append(display_text)
-                    raw_choices_map[display_text] = f"install {name}"
-        
+                    # Only show install option if an install function exists
+                    if software.get("install_func"):
+                        display_text = f"[{t('install')}] {name}"
+                        choices.append(display_text)
+                        raw_choices_map[display_text] = f"install {name}"
+
+        choices.sort()
         choices.append(t('back'))
         
         action_display = questionary.select(t('software_manager_prompt'), choices=choices).ask()
@@ -635,7 +715,12 @@ def show_software_manager():
         software = SOFTWARE_MAP.get(software_name)
 
         if software:
-            if verb == 'install':
-                software['install'](software['package_name'])
-            elif verb == 'manage':
-                software['manage']() 
+            if verb == 'install' and software.get("install_func"):
+                # Pass package_name if it exists, as some installers require it
+                package_name = software.get("package_name", "")
+                software['install_func'](package_name)
+            elif verb == 'manage' and software.get("manage_func"):
+                software['manage_func']()
+            else:
+                console.print(f"[red]{t('invalid_action_error', action=verb, software=software_name)}[/red]")
+                questionary.press_any_key_to_continue().ask() 

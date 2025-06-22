@@ -763,5 +763,10 @@
     "monitor_sort_cpu": "CPU %",
 
     "security_prompt": "Select an audit tool:",
-    "security_menu_back": "Back to Main Menu"
+    "security_menu_back": "Back to Main Menu",
+
+    "webmin_cleaning_up": "Cleaning up...",
+    "repo_setup_success": "Repository setup complete.",
+    "webmin_access_info": "Webmin installed successfully!\nAccess it at: https://{ip}:10000",
+    "invalid_action_error": "Error: Invalid action '{action}' for software '{software}'."
 }
