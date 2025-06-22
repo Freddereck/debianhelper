@@ -679,9 +679,9 @@ def delete_site(site_conf_name, web_server):
         if project_name and is_tool_installed('pm2'):
             console.print(t('deleting_pm2_process', name=project_name))
             # Run as the user that owns the process, likely www-data
-            # Use fallow_error=True to prevent script from crashing if process not found
-            run_command(f"sudo -u www-data pm2 delete {project_name}", fallow_error=True)
-            run_command("sudo -u www-data pm2 save", fallow_error=True)
+            # Use allow_error=True to prevent script from crashing if process not found
+            run_command(f"sudo -u www-data pm2 delete {project_name}", allow_error=True)
+            run_command("sudo -u www-data pm2 save", allow_error=True)
 
 
         # --- Disable and Remove Site ---
@@ -717,8 +717,8 @@ def delete_site(site_conf_name, web_server):
         # --- Revoke SSL ---
         if is_tool_installed('certbot'):
             if questionary.confirm(t('confirm_revoke_ssl', domain=domain)).ask():
-                # Use --non-interactive to avoid prompts and fallow_error to continue if cert not found
-                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive", fallow_error=True)
+                # Use --non-interactive to avoid prompts and allow_error to continue if cert not found
+                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive", allow_error=True)
                 console.print(f"[green]{t('ssl_revoked')}[/green]")
 
         # --- Reload web server ---
