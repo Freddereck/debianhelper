@@ -291,18 +291,33 @@ def create_nginx_nextjs_site(domain_prefill=None, web_root_prefill=None):
     # Step 3: Create Next.js app (if not from git) and set permissions
     if not web_root_prefill:
         console.print(f"[cyan]{t('creating_nextjs_app', path=web_root)}[/cyan]")
-        try:
-            # Create app as current user in its directory
-            run_command(f"sudo mkdir -p {web_root}")
-            run_command(f"sudo chown -R $USER:$USER {web_root}") # Temporarily own to create app
-            run_command(f"npx --yes create-next-app@latest {web_root} --ts --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm")
-            console.print(f"[green]{t('nextjs_app_created_successfully')}[/green]")
-        except Exception as e:
-            console.print(f"[red]{t('error_creating_nextjs_app', error=e)}[/red]")
+        
+        # Get the original user who invoked sudo
+        invoking_user = os.environ.get('SUDO_USER', os.environ.get('USER', 'www-data'))
+
+        # Create directory and chown to the invoking user so npx can write to it
+        if not run_command(f"sudo mkdir -p {web_root}"):
+            return
+        if not run_command(f"sudo chown -R {invoking_user}:{invoking_user} {web_root}"):
             return
 
+        # Create the Next.js app with live output
+        # Running npx as the invoking user to avoid permission issues and running as root.
+        console.print(f"[yellow]{t('running_create_next_app', default='Running create-next-app, this may take a moment...')}[/yellow]")
+        create_command = f"sudo -u {invoking_user} npx --yes create-next-app@latest {web_root} --ts --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm"
+        
+        if not run_command(create_command, show_output=True):
+             console.print(f"[red]{t('error_creating_nextjs_app', default='Failed to create Next.js application.')}[/red]")
+             # Offer to clean up the directory
+             if sudo_file_exists(f"{web_root}/package.json") and questionary.confirm(t('confirm_delete_web_root_on_fail', default='Do you want to delete the partially created directory {path}?', path=web_root)).ask():
+                 run_command(f"sudo rm -rf {web_root}")
+             return
+
+        console.print(f"[green]{t('nextjs_app_created_successfully')}[/green]")
+
     # Change ownership to www-data before installing dependencies and running the app
-    run_command(f"sudo chown -R www-data:www-data {web_root}")
+    if not run_command(f"sudo chown -R www-data:www-data {web_root}"):
+        return
 
     # Step 4: Build and start with PM2 as www-data user
     try:
