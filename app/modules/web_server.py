@@ -1,6 +1,7 @@
 import os
 import questionary
 from rich.console import Console
+import re
 
 from app.translations import t
 from app.utils import is_tool_installed, run_command, run_command_for_output
@@ -89,6 +90,93 @@ def show_web_server_manager():
             selected_function()
             questionary.press_any_key_to_continue(t('press_any_key')).ask()
 
+def create_new_site(web_server):
+    """Guides the user through creating a new static site."""
+    if web_server == 'nginx':
+        create_nginx_static_site()
+    elif web_server == 'apache':
+        create_apache_static_site()
+
+def create_nginx_static_site(domain_prefill=None, web_root_prefill=None):
+    """Creates a new static site for Nginx."""
+    console.print(f"\n[bold green]{t('create_static_site_title')}[/bold green]")
+
+    domain = domain_prefill or questionary.text(t('enter_domain_name')).ask()
+    if not domain:
+        console.print(f"[red]{t('operation_cancelled')}[/red]")
+        return
+        
+    web_root = web_root_prefill or f"/var/www/{domain}"
+
+    if not web_root_prefill:
+        # Create directory and a placeholder file if not a git deployment
+        console.print(t('creating_web_root', path=web_root))
+        run_command(f"sudo mkdir -p {web_root}")
+        run_command(f"echo '<h1>{domain} - {t('coming_soon') }</h1>' | sudo tee {web_root}/index.html")
+        run_command(f"sudo chown -R www-data:www-data {web_root}")
+
+    nginx_conf_path = f"/etc/nginx/sites-available/{domain}"
+    nginx_conf_content = f"""
+# Web-Root: {web_root}
+server {{
+    listen 80;
+    server_name {domain};
+    root {web_root};
+    index index.html index.htm;
+
+    location / {{
+        try_files $uri $uri/ =404;
+    }}
+}}
+"""
+    console.print(t('creating_nginx_config', path=nginx_conf_path))
+    try:
+        run_command(f"echo \"{nginx_conf_content}\" | sudo tee {nginx_conf_path}")
+        run_command(f"sudo ln -s -f {nginx_conf_path} /etc/nginx/sites-enabled/") # -f to overwrite if it exists
+        run_command("sudo nginx -t")
+        run_command("sudo systemctl reload nginx")
+        console.print(f"[bold green]{t('site_created_successfully', domain=domain)}[/bold green]")
+        ask_and_install_ssl(domain, 'nginx')
+    except Exception as e:
+        console.print(f"[red]{t('error_reloading_nginx', error=e)}[/red]")
+
+def create_apache_static_site(domain_prefill=None, web_root_prefill=None):
+    """Creates a new static site for Apache."""
+    console.print(f"\n[bold green]{t('create_static_site_title')}[/bold green]")
+
+    domain = domain_prefill or questionary.text(t('enter_domain_name')).ask()
+    if not domain:
+        console.print(f"[red]{t('operation_cancelled')}[/red]")
+        return
+        
+    web_root = web_root_prefill or f"/var/www/{domain}"
+    
+    if not web_root_prefill:
+        console.print(t('creating_web_root', path=web_root))
+        run_command(f"sudo mkdir -p {web_root}")
+        run_command(f"echo '<h1>{domain} - {t('coming_soon') }</h1>' | sudo tee {web_root}/index.html")
+        run_command(f"sudo chown -R www-data:www-data {web_root}")
+
+    apache_conf_path = f"/etc/apache2/sites-available/{domain}.conf"
+    apache_conf_content = f"""
+<VirtualHost *:80>
+    ServerAdmin webmaster@localhost
+    ServerName {domain}
+    DocumentRoot {web_root}
+    ErrorLog ${{APACHE_LOG_DIR}}/error.log
+    CustomLog ${{APACHE_LOG_DIR}}/access.log combined
+</VirtualHost>
+"""
+    console.print(t('creating_apache_config', path=apache_conf_path))
+    try:
+        run_command(f"echo \"{apache_conf_content}\" | sudo tee {apache_conf_path}")
+        run_command(f"sudo a2ensite {domain}.conf")
+        run_command("sudo systemctl reload apache2")
+        console.print(f"[bold green]{t('site_created_successfully', domain=domain)}[/bold green]")
+        ask_and_install_ssl(domain, 'apache')
+    except Exception as e:
+        console.print(f"[red]{t('error_reloading_apache', error=e)}[/red]")
+
 def create_site_from_git(web_server):
     """Creates a new site by cloning a Git repository."""
     console.print(f"\n[bold green]{t('create_from_git_title')}[/bold green]")
@@ -131,7 +219,7 @@ def create_site_from_git(web_server):
         console.print("[yellow]Node.js project detected.[/yellow]")
         if web_server == 'nginx':
             # Slightly adapt the existing nextjs function
-            create_nginx_nodejs_app(domain, web_root)
+            create_nginx_nextjs_site(domain_prefill=domain, web_root_prefill=web_root)
         else:
             # TODO: Implement for Apache
             console.print("[red]Node.js deployment is currently only supported for Nginx.[/red]")
@@ -152,14 +240,7 @@ def create_site_from_git(web_server):
         elif web_server == 'apache':
             create_apache_static_site(domain_prefill=domain, web_root_prefill=web_root)
 
-def create_new_site(web_server):
-    """Guides the user through creating a new static site."""
-    if web_server == 'nginx':
-        create_nginx_static_site()
-    elif web_server == 'apache':
-        create_apache_static_site()
-
-def create_nginx_nextjs_site():
+def create_nginx_nextjs_site(domain_prefill=None, web_root_prefill=None):
     """Guides the user through creating and deploying a Next.js site with Nginx."""
     console.print(f"\n[bold green]{t('create_nextjs_site_title')}[/bold green]")
     
@@ -170,41 +251,53 @@ def create_nginx_nextjs_site():
     if missing_deps:
         console.print(f"[bold yellow]{t('missing_dependencies_nextjs', deps=', '.join(missing_deps))}[/bold yellow]")
         # Here you could add logic to guide the user to install them, possibly via dev_tools
-        questionary.press_any_key_to_continue(t('please_install_and_retry')).ask()
-        return
+        if 'pm2' in missing_deps and questionary.confirm(t('pm2_install_prompt')).ask():
+            run_command("sudo npm install pm2 -g")
+        else:
+            questionary.press_any_key_to_continue(t('please_install_and_retry')).ask()
+            return
 
     # Step 2: Get project details
-    project_name = questionary.text(t('enter_project_name_nextjs')).ask()
+    project_name = None
+    if web_root_prefill:
+        project_name = os.path.basename(web_root_prefill)
+    else:
+        project_name = questionary.text(t('enter_project_name_nextjs')).ask()
+
     if not project_name:
         console.print(f"[red]{t('operation_cancelled')}[/red]")
         return
         
-    domain = questionary.text(t('enter_domain_name')).ask()
+    domain = domain_prefill or questionary.text(t('enter_domain_name')).ask()
     if not domain:
         console.print(f"[red]{t('operation_cancelled')}[/red]")
         return
         
-    port = questionary.text(t('enter_port_nextjs'), default='3000').ask()
-    if not port:
-        console.print(f"[red]{t('operation_cancelled')}[/red]")
-        return
+    # Find an available port, starting from 3000
+    port = 3000
+    while True:
+        output = run_command(f"sudo lsof -i:{port}")
+        if not output:
+            break
+        port += 1
 
-    web_root = f"/var/www/{project_name}"
+    web_root = web_root_prefill or f"/var/www/{project_name}"
 
-    # Step 3: Create Next.js app and set permissions
-    console.print(f"[cyan]{t('creating_nextjs_app', path=web_root)}[/cyan]")
-    try:
-        # Create app as current user in its directory
-        run_command(f"sudo mkdir -p {web_root}")
-        run_command(f"sudo chown -R $USER:$USER {web_root}") # Temporarily own to create app
-        run_command(f"npx --yes create-next-app@latest {web_root} --ts --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm")
-        console.print(f"[green]{t('nextjs_app_created_successfully')}[/green]")
-        
-        # Change ownership to www-data before installing dependencies and running the app
-        run_command(f"sudo chown -R www-data:www-data {web_root}")
-    except Exception as e:
-        console.print(f"[red]{t('error_creating_nextjs_app', error=e)}[/red]")
-        return
+    # Step 3: Create Next.js app (if not from git) and set permissions
+    if not web_root_prefill:
+        console.print(f"[cyan]{t('creating_nextjs_app', path=web_root)}[/cyan]")
+        try:
+            # Create app as current user in its directory
+            run_command(f"sudo mkdir -p {web_root}")
+            run_command(f"sudo chown -R $USER:$USER {web_root}") # Temporarily own to create app
+            run_command(f"npx --yes create-next-app@latest {web_root} --ts --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm")
+            console.print(f"[green]{t('nextjs_app_created_successfully')}[/green]")
+        except Exception as e:
+            console.print(f"[red]{t('error_creating_nextjs_app', error=e)}[/red]")
+            return
+
+    # Change ownership to www-data before installing dependencies and running the app
+    run_command(f"sudo chown -R www-data:www-data {web_root}")
 
     # Step 4: Build and start with PM2 as www-data user
     try:
@@ -222,6 +315,8 @@ def create_nginx_nextjs_site():
     # Step 5: Create Nginx config for reverse proxy
     nginx_conf_path = f"/etc/nginx/sites-available/{domain}"
     nginx_conf_content = f"""
+# Project-Name: {project_name}
+# Web-Root: {web_root}
 server {{
     listen 80;
     server_name {domain};
@@ -241,8 +336,11 @@ server {{
         # Using tee to write with sudo
         run_command(f"echo \"{nginx_conf_content}\" | sudo tee {nginx_conf_path}")
         # Enable the site
-        run_command(f"sudo ln -s {nginx_conf_path} /etc/nginx/sites-enabled/")
-        console.print(f"[green]{t('nginx_config_created')}[/green]")
+        run_command(f"sudo ln -s -f {nginx_conf_path} /etc/nginx/sites-enabled/") # Use -f to overwrite
+        run_command("sudo nginx -t")
+        run_command("sudo systemctl reload nginx")
+        console.print(f"[bold green]{t('nginx_config_created')}[/green]")
+        ask_and_install_ssl(domain, 'nginx')
     except Exception as e:
         console.print(f"[red]{t('error_creating_nginx_config', error=e)}[/red]")
         # Add cleanup logic here if needed
@@ -258,7 +356,6 @@ server {{
         ask_and_install_ssl(domain, 'nginx')
     except Exception as e:
         console.print(f"[red]{t('error_reloading_nginx', error=e)}[/red]")
-        return
 
 def create_apache_nextjs_site():
     """Guides the user through creating and deploying a Next.js site with Apache."""
@@ -330,6 +427,7 @@ def create_nginx_php_site(domain_prefill=None, web_root_prefill=None):
     # Step 4: Create Nginx config
     nginx_conf_path = f"/etc/nginx/sites-available/{domain}"
     nginx_conf_content = f"""
+# Web-Root: {web_root}
 server {{
     listen 80;
     server_name {domain};
@@ -354,7 +452,7 @@ server {{
     console.print(t('creating_nginx_config', path=nginx_conf_path))
     try:
         run_command(f'echo "{nginx_conf_content}" | sudo tee {nginx_conf_path}')
-        run_command(f"sudo ln -s {nginx_conf_path} /etc/nginx/sites-enabled/")
+        run_command(f"sudo ln -s -f {nginx_conf_path} /etc/nginx/sites-enabled/")
         console.print(f"[green]{t('nginx_config_created')}[/green]")
     except Exception as e:
         console.print(f"[red]{t('error_creating_nginx_config', error=e)}[/red]")
@@ -413,6 +511,7 @@ def create_apache_php_site(domain_prefill=None, web_root_prefill=None):
         
     apache_conf_path = f"/etc/apache2/sites-available/{domain}.conf"
     apache_conf_content = f"""
+# Web-Root: {web_root}
 <VirtualHost *:80>
     ServerName {domain}
     DocumentRoot {web_root}
@@ -549,7 +648,7 @@ def manage_sites(web_server):
         delete_site(selected_site, web_server)
 
 def delete_site(site_conf_name, web_server):
-    """Deletes a website."""
+    """Deletes a website, including its web root and associated processes like PM2."""
     domain = site_conf_name.replace('.conf', '') if '.conf' in site_conf_name else site_conf_name
     
     if not questionary.confirm(t('confirm_delete_site', site=domain)).ask():
@@ -559,32 +658,70 @@ def delete_site(site_conf_name, web_server):
     console.print(f"[cyan]{t('deleting_site', site=domain)}...[/cyan]")
 
     try:
-        # Step 1: Disable site
+        conf_path = f"/etc/{web_server}/{'sites-available'}/{site_conf_name}"
+        
+        # --- Read config to get metadata ---
+        project_name = None
+        doc_root = None
+        try:
+            with open(conf_path, 'r') as f:
+                content = f.read()
+                name_match = re.search(r'#\s*Project-Name:\s*(.+)', content)
+                root_match = re.search(r'#\s*Web-Root:\s*(.+)', content)
+                if name_match:
+                    project_name = name_match.group(1).strip()
+                if root_match:
+                    doc_root = root_match.group(1).strip()
+        except Exception as e:
+            console.print(f"[yellow]{t('warning_could_not_read_config', path=conf_path, error=e)}[/yellow]")
+        
+        # --- Stop and delete PM2 process if it exists ---
+        if project_name and is_tool_installed('pm2'):
+            console.print(t('deleting_pm2_process', name=project_name))
+            # Run as the user that owns the process, likely www-data
+            # Use fallow_error=True to prevent script from crashing if process not found
+            run_command(f"sudo -u www-data pm2 delete {project_name}", fallow_error=True)
+            run_command("sudo -u www-data pm2 save", fallow_error=True)
+
+
+        # --- Disable and Remove Site ---
         if web_server == 'nginx':
-            run_command(f"sudo rm /etc/nginx/sites-enabled/{site_conf_name}")
+            run_command(f"sudo rm -f /etc/nginx/sites-enabled/{site_conf_name}")
         else: # apache
             run_command(f"sudo a2dissite {site_conf_name}")
-
-        # Step 2: Remove config file
-        conf_path = f"/etc/{web_server}/{'sites-available' if web_server == 'nginx' else 'sites-available'}/{site_conf_name}"
-        run_command(f"sudo rm {conf_path}")
+        
+        run_command(f"sudo rm -f {conf_path}")
         console.print(f"[green]{t('site_disabled_and_config_removed')}[/green]")
         
-        # Step 3: Ask to remove web root
-        doc_root = f"/var/www/{domain}" # This is a guess, should parse from config in future
-        if os.path.exists(doc_root):
+        # --- Fallback for doc_root if not in config ---
+        if not doc_root:
+            # For Next.js projects, the project name is the folder. For others, it's the domain.
+            # This is a bit of a guess for older sites.
+            potential_nextjs_root = f"/var/www/{project_name}"
+            potential_generic_root = f"/var/www/{domain}"
+            if project_name and os.path.exists(potential_nextjs_root):
+                doc_root = potential_nextjs_root
+            elif os.path.exists(potential_generic_root):
+                doc_root = potential_generic_root
+
+
+        # --- Remove web root ---
+        if doc_root and os.path.exists(doc_root):
             if questionary.confirm(t('confirm_delete_web_root', path=doc_root)).ask():
                 run_command(f"sudo rm -rf {doc_root}")
                 console.print(f"[green]{t('web_root_deleted')}[/green]")
+        else:
+            console.print(f"[yellow]{t('web_root_not_found_or_not_specified')}[/yellow]")
 
-        # Step 4: Ask to revoke SSL
+
+        # --- Revoke SSL ---
         if is_tool_installed('certbot'):
-            # This assumes cert name matches domain.
             if questionary.confirm(t('confirm_revoke_ssl', domain=domain)).ask():
-                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive")
+                # Use --non-interactive to avoid prompts and fallow_error to continue if cert not found
+                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive", fallow_error=True)
                 console.print(f"[green]{t('ssl_revoked')}[/green]")
 
-        # Step 5: Reload web server
+        # --- Reload web server ---
         reload_cmd = "sudo systemctl reload nginx" if web_server == 'nginx' else "sudo systemctl reload apache2"
         run_command(reload_cmd)
         
@@ -643,6 +780,7 @@ def deploy_docker_project(domain, web_root, web_server):
     if web_server == 'nginx':
         nginx_conf_path = f"/etc/nginx/sites-available/{domain}"
         nginx_conf_content = f"""
+# Web-Root: {web_root}
 server {{
     listen 80;
     server_name {domain};
@@ -670,266 +808,24 @@ server {{
         # TODO: Implement Apache reverse proxy for Docker
         console.print("[red]Apache reverse proxy for Docker is not yet implemented.[/red]")
 
-def create_nginx_nodejs_app(domain_prefill=None, web_root_prefill=None):
-    """Creates a Next.js site for Nginx, can also be used for other Node.js apps."""
-    console.print(f"\n[bold green]{t('create_nextjs_site_title')}[/bold green]")
-    
-    # Check for dependencies
-    for tool in ['node', 'npm', 'pm2']:
-        if not is_tool_installed(tool):
-            console.print(f"[bold red]{t('dependency_not_found', tool=tool)}[/bold red]")
-            # Offer to install PM2
-            if tool == 'pm2' and questionary.confirm(t('pm2_install_prompt')).ask():
-                 run_command("sudo npm install pm2 -g")
-            else:
-                console.print(t('please_install_and_retry', tool=tool))
-                return
-    
-    domain = domain_prefill or questionary.text(t('enter_domain_name')).ask()
-    if not domain:
-        console.print(f"[red]{t('operation_cancelled')}[/red]")
-        return
-        
-    web_root = web_root_prefill or f"/var/www/{domain}"
+def create_php_site(web_server):
+    """Guides the user through creating a new PHP site."""
+    if web_server == 'nginx':
+        create_nginx_php_site()
+    elif web_server == 'apache':
+        create_apache_php_site()
 
-    if not web_root_prefill:
-        # Create a new Next.js app if we are not using a pre-filled (Git) directory
-        console.print(t('creating_nextjs_app', path=web_root))
-        try:
-            # Use non-interactive mode for create-next-app
-            run_command(f"sudo npx --yes create-next-app@latest {web_root}")
-            run_command(f"sudo chown -R www-data:www-data {web_root}")
-        except Exception as e:
-            console.print(f"[red]{t('error_creating_nextjs_app', error=e)}[/red]")
-            return
-
-    # Install dependencies and build
-    console.print(t('installing_npm_deps'))
-    try:
-        # Run npm in the project directory
-        run_command(f"sudo -u www-data bash -c 'cd {web_root} && npm install'")
-        console.print(t('building_npm_app'))
-        run_command(f"sudo -u www-data bash -c 'cd {web_root} && npm run build'")
-    except Exception as e:
-        console.print(f"[red]{t('error_npm_build', error=e)}[/red]")
-        return
-
-    # Find an available port
-    port = 3000
-    while True:
-        output = run_command(f"sudo lsof -i:{port}")
-        if not output:
-            break
-        port += 1
-    
-    console.print(t('starting_app_with_pm2', port=port))
-    try:
-        # Start the app with PM2
-        # Use a specific name for the pm2 process to manage it later
-        app_name = domain.replace('.', '-')
-        run_command(f"sudo -u www-data bash -c 'cd {web_root} && PORT={port} pm2 start npm --name \"{app_name}\" -- start'")
-        run_command("sudo pm2 save")
-        run_command("sudo pm2 startup") # To ensure it runs on boot
-    except Exception as e:
-        console.print(f"[red]{t('error_starting_pm2', error=e)}[/red]")
-        return
-        
-    # Create Nginx config for reverse proxy
-    nginx_conf_path = f"/etc/nginx/sites-available/{domain}"
-    nginx_conf_content = f"""
-server {{
-    listen 80;
-    server_name {domain};
-
-    location / {{
-        proxy_pass http://localhost:{port};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }}
-}}
-"""
-    console.print(t('creating_nginx_config', path=nginx_conf_path))
-    try:
-        run_command(f"echo \"{nginx_conf_content}\" | sudo tee {nginx_conf_path}")
-        run_command(f"sudo ln -s {nginx_conf_path} /etc/nginx/sites-enabled/")
-    except Exception as e:
-        console.print(f"[red]{t('error_creating_nginx_config', error=e)}[/red]")
-        return
-        
-    # Test and reload Nginx
-    console.print(t('testing_nginx_config'))
-    try:
-        run_command("sudo nginx -t")
-        run_command("sudo systemctl reload nginx")
-        console.print(f"[bold green]{t('site_created_successfully', domain=domain)}[/bold green]")
-        ask_and_install_ssl(domain, 'nginx')
-    except Exception as e:
-        console.print(f"[red]{t('error_reloading_nginx', error=e)}[/red]")
-
-def create_apache_nodejs_site():
-    console.print("[yellow]Next.js deployment via this script is optimized for Nginx as a reverse proxy.[/yellow]")
-    console.print("[yellow]Apache support for this is not yet implemented.[/yellow]")
-    pass
-
-def create_nginx_php_site(domain_prefill=None, web_root_prefill=None):
-    """Creates a PHP site for Nginx."""
-    console.print(f"\n[bold green]{t('create_php_site_title')}[/bold green]")
-    
-    # Check for php-fpm
-    php_fpm_socket = find_php_fpm_socket()
-
-    if not is_tool_installed('php') or not php_fpm_socket:
-        console.print(f"[bold yellow]{t('php_fpm_not_installed')}[/bold yellow]")
-        if questionary.confirm(t('install_php_fpm_prompt')).ask():
-            try:
-                console.print(f"[cyan]{t('installing_tool', tool='PHP-FPM')}...[/cyan]")
-                # Installs a default version of PHP and FPM
-                run_command("sudo apt-get update && sudo apt-get install -y php-fpm")
-                php_fpm_socket = find_php_fpm_socket()
-                if not php_fpm_socket:
-                    console.print(f"[bold red]{t('php_fpm_socket_not_found_after_install')}[/bold red]")
-                    return
-                console.print(f"[bold green]{t('tool_installed_successfully', tool='PHP-FPM')}[/bold green]")
-            except Exception as e:
-                console.print(f"[bold red]{t('tool_installation_failed', tool='PHP-FPM', error=e)}[/bold red]")
-                return
-        else:
-            return # User chose not to install
-
-    domain = domain_prefill or questionary.text(t('enter_domain_name')).ask()
-    if not domain:
-        console.print(f"[red]{t('operation_cancelled')}[/red]")
-        return
-        
-    web_root = web_root_prefill or f"/var/www/{domain}"
-    
-    # Step 3: Create web root and index.php
-    console.print(t('creating_web_root', path=web_root))
-    try:
-        run_command(f"sudo mkdir -p {web_root}")
-        # Create a test php file
-        index_php_content = "<?php phpinfo(); ?>"
-        run_command(f"echo '<?php phpinfo(); ?>' | sudo tee {web_root}/index.php > /dev/null")
-        run_command(f"sudo chown -R www-data:www-data {web_root}")
-        console.print(f"[green]{t('directory_created_successfully')}[/green]")
-    except Exception as e:
-        console.print(f"[red]{t('error_creating_directory', error=e)}[/red]")
-        return
-            
-    # Step 4: Create Nginx config
-    nginx_conf_path = f"/etc/nginx/sites-available/{domain}"
-    nginx_conf_content = f"""
-server {{
-    listen 80;
-    server_name {domain};
-    root {web_root};
-
-    index index.php index.html index.htm;
-
-    location / {{
-        try_files $uri $uri/ /index.php?$query_string;
-    }}
-
-    location ~ \\.php$ {{
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:{php_fpm_socket};
-    }}
-
-    location ~ /\\.ht {{
-        deny all;
-    }}
-}}
-"""
-    console.print(t('creating_nginx_config', path=nginx_conf_path))
-    try:
-        run_command(f'echo "{nginx_conf_content}" | sudo tee {nginx_conf_path}')
-        run_command(f"sudo ln -s {nginx_conf_path} /etc/nginx/sites-enabled/")
-        console.print(f"[green]{t('nginx_config_created')}[/green]")
-    except Exception as e:
-        console.print(f"[red]{t('error_creating_nginx_config', error=e)}[/red]")
-        return
-        
-    # Step 5: Test and reload Nginx
-    console.print(t('testing_nginx_config'))
-    try:
-        run_command("sudo nginx -t")
-        run_command("sudo systemctl reload nginx")
-        console.print(f"[bold green]{t('php_site_created_successfully', domain=domain)}[/bold green]")
-        ask_and_install_ssl(domain, 'nginx')
-    except Exception as e:
-        console.print(f"[red]{t('error_reloading_nginx', error=e)}[/red]")
-        if questionary.confirm(t('nginx_reload_failed_cleanup_prompt')).ask():
-             run_command(f"sudo rm {nginx_conf_path}")
-             run_command(f"sudo rm /etc/nginx/sites-enabled/{domain}")
-             if not web_root_prefill:
-                 run_command(f"sudo rm -rf {web_root}")
-             console.print(t('cleanup_complete')) 
-
-def create_apache_php_site(domain_prefill=None, web_root_prefill=None):
-    """Creates a PHP site for Apache."""
-    console.print(f"\n[bold green]{t('create_php_site_title')}[/bold green]")
-
-    # Check for php-fpm and apache module
-    if not is_tool_installed('php-fpm'):
-        console.print(f"[bold red]{t('dependency_not_found', tool='php-fpm')}[/bold red]")
-        console.print(t('please_install_and_retry', tool='php-fpm'))
-        return
-    
-    # Check for libapache2-mod-php
-    php_apache_mod_status = run_command("dpkg -s libapache2-mod-php | grep Status")
-    if "install ok installed" not in php_apache_mod_status:
-         console.print(f"[bold red]{t('dependency_not_found', tool='libapache2-mod-php')}[/bold red]")
-         if questionary.confirm(t('install_apache_php_mod_prompt')).ask():
-             run_command("sudo apt-get install -y libapache2-mod-php")
-         else:
-             return
-    
-    domain = domain_prefill or questionary.text(t('enter_domain_name')).ask()
-    if not domain:
-        console.print(f"[red]{t('operation_cancelled')}[/red]")
-        return
-        
-    web_root = web_root_prefill or f"/var/www/{domain}"
-
-    if not web_root_prefill:
-        console.print(t('creating_web_root', path=web_root))
-        try:
-            run_command(f"sudo mkdir -p {web_root}")
-            run_command(f"echo '<?php phpinfo(); ?>' | sudo tee {web_root}/index.php > /dev/null")
-            run_command(f"sudo chown -R www-data:www-data {web_root}")
-            console.print(f"[green]{t('directory_created_successfully')}[/green]")
-        except Exception as e:
-            console.print(f"[red]{t('error_creating_directory', error=e)}[/red]")
-            return
-
-    apache_conf_path = f"/etc/apache2/sites-available/{domain}.conf"
-    apache_conf_content = f"""
-<VirtualHost *:80>
-    ServerName {domain}
-    DocumentRoot {web_root}
-    <Directory {web_root}>
-        AllowOverride All
-    </Directory>
-    ErrorLog ${{APACHE_LOG_DIR}}/error.log
-    CustomLog ${{APACHE_LOG_DIR}}/access.log combined
-</VirtualHost>
-"""
-    console.print(t('creating_apache_config', path=apache_conf_path))
-    try:
-        run_command(f"echo \"{apache_conf_content}\" | sudo tee {apache_conf_path}")
-        run_command(f"sudo a2ensite {domain}.conf")
-        run_command(f"sudo a2enmod rewrite") # Often needed for PHP apps
-        run_command(f"sudo systemctl reload apache2")
-        console.print(f"[bold green]{t('site_created_successfully', domain=domain)}[/bold green]")
-        ask_and_install_ssl(domain, 'apache')
-    except Exception as e:
-        console.print(f"[red]{t('error_reloading_apache', error=e)}[/red]")
-        if questionary.confirm(t('apache_reload_failed_cleanup_prompt')).ask():
-             run_command(f"sudo rm {apache_conf_path}")
-             run_command(f"sudo rm /etc/apache2/sites-enabled/{domain}.conf")
-             if not web_root_prefill:
-                run_command(f"sudo rm -rf {web_root}")
-             console.print(t('cleanup_complete')) 
+def find_php_fpm_socket():
+    """Finds the PHP-FPM socket file."""
+    possible_paths = [
+        "/var/run/php/",
+        "/run/php/"
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            # Find any listening socket in the directory
+            for f in os.listdir(path):
+                if f.startswith('php') and f.endswith('-fpm.sock'):
+                    return os.path.join(path, f)
+    # Fallback to a common default if not found
+    return "/var/run/php/php-fpm.sock"
