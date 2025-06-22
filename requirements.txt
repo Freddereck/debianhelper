@@ -1,6 +1,6 @@
 questionary
 rich
-crontab
+python-crontab
 psutil
 packaging
 qrcode
