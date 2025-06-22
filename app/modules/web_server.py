@@ -4,7 +4,7 @@ from rich.console import Console
 import re
 
 from app.translations import t
-from app.utils import is_tool_installed, run_command, run_command_for_output, sudo_file_exists
+from app.utils import is_tool_installed, run_command, run_command_for_output, run_command_live
 
 console = Console()
 
@@ -215,12 +215,12 @@ def create_site_from_git(web_server):
         return
 
     # --- Project Type Detection ---
-    if sudo_file_exists(f"{web_root}/docker-compose.yml") or sudo_file_exists(f"{web_root}/Dockerfile"):
+    if os.path.exists(f"{web_root}/docker-compose.yml") or os.path.exists(f"{web_root}/Dockerfile"):
         # TODO: Implement Docker/Docker-compose deployment
         console.print("[yellow]Docker project detected. Deployment logic not yet implemented.[/yellow]")
         deploy_docker_project(domain, web_root, web_server)
 
-    elif sudo_file_exists(f"{web_root}/package.json"):
+    elif os.path.exists(f"{web_root}/package.json"):
         console.print("[yellow]Node.js project detected.[/yellow]")
         if web_server == 'nginx':
             # Slightly adapt the existing nextjs function
@@ -229,7 +229,7 @@ def create_site_from_git(web_server):
             # TODO: Implement for Apache
             console.print("[red]Node.js deployment is currently only supported for Nginx.[/red]")
 
-    elif sudo_file_exists(f"{web_root}/index.php"):
+    elif os.path.exists(f"{web_root}/index.php"):
         console.print("[yellow]PHP project detected.[/yellow]")
         # We can reuse the existing PHP site creators
         if web_server == 'nginx':
@@ -291,32 +291,21 @@ def create_nginx_nextjs_site(domain_prefill=None, web_root_prefill=None):
     # Step 3: Create Next.js app (if not from git) and set permissions
     if not web_root_prefill:
         console.print(f"[cyan]{t('creating_nextjs_app', path=web_root)}[/cyan]")
-        
-        # Phase 1: Create directory and set initial ownership to www-data
-        if not run_command(f"sudo mkdir -p {web_root}"):
-            console.print(f"[red]{t('error_creating_directory', path=web_root)}[/red]")
+        try:
+            # Create app as current user in its directory
+            run_command(f"sudo mkdir -p {web_root}")
+            run_command(f"sudo chown -R $USER:$USER {web_root}") # Temporarily own to create app
+            run_command_live(
+                f"npx --yes create-next-app@latest {web_root} --ts --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm --no-git --no-turbopack",
+                log_filename=f"/var/log/{project_name}_install.log"
+            )
+            console.print(f"[green]{t('nextjs_app_created_successfully')}[/green]")
+        except Exception as e:
+            console.print(f"[red]{t('error_creating_nextjs_app', error=e)}[/red]")
             return
-        if not run_command(f"sudo chown -R www-data:www-data {web_root}"):
-            console.print(f"[red]{t('error_setting_permissions', path=web_root)}[/red]")
-            return
 
-        # Phase 2: Run create-next-app non-interactively.
-        # We run it as www-data user in its target directory.
-        console.print(f"[yellow]{t('running_create_next_app', default='Running create-next-app, this may take a moment...')}[/yellow]")
-        create_command = f"sudo -u www-data npx --yes create-next-app@latest {web_root} --ts --eslint --tailwind --app --src-dir --import-alias '@/*' --use-npm"
-        
-        if not run_command(create_command, show_output=True):
-             console.print(f"[red]{t('error_creating_nextjs_app', default='Failed to create Next.js application.')}[/red]")
-             # Offer to clean up the directory
-             if sudo_file_exists(f"{web_root}") and questionary.confirm(t('confirm_delete_web_root_on_fail', default='Do you want to delete the partially created directory {path}?', path=web_root)).ask():
-                 run_command(f"sudo rm -rf {web_root}")
-             return
-
-        console.print(f"[green]{t('nextjs_app_created_successfully')}[/green]")
-
-    # Ownership is already www-data from the creation step
-    # if not run_command(f"sudo chown -R www-data:www-data {web_root}"):
-    #     return
+    # Change ownership to www-data before installing dependencies and running the app
+    run_command(f"sudo chown -R www-data:www-data {web_root}")
 
     # Step 4: Build and start with PM2 as www-data user
     try:
@@ -698,9 +687,9 @@ def delete_site(site_conf_name, web_server):
         if project_name and is_tool_installed('pm2'):
             console.print(t('deleting_pm2_process', name=project_name))
             # Run as the user that owns the process, likely www-data
-            # Use suppress_errors=True to prevent script from crashing if process not found
-            run_command(f"sudo -u www-data pm2 delete {project_name}", suppress_errors=True)
-            run_command("sudo -u www-data pm2 save", suppress_errors=True)
+            # Use allow_error=True to prevent script from crashing if process not found
+            run_command(f"sudo -u www-data pm2 delete {project_name}", allow_error=True)
+            run_command("sudo -u www-data pm2 save", allow_error=True)
 
 
         # --- Disable and Remove Site ---
@@ -718,14 +707,14 @@ def delete_site(site_conf_name, web_server):
             # This is a bit of a guess for older sites.
             potential_nextjs_root = f"/var/www/{project_name}"
             potential_generic_root = f"/var/www/{domain}"
-            if project_name and sudo_file_exists(potential_nextjs_root):
+            if project_name and os.path.exists(potential_nextjs_root):
                 doc_root = potential_nextjs_root
-            elif sudo_file_exists(potential_generic_root):
+            elif os.path.exists(potential_generic_root):
                 doc_root = potential_generic_root
 
 
         # --- Remove web root ---
-        if doc_root and sudo_file_exists(doc_root):
+        if doc_root and os.path.exists(doc_root):
             if questionary.confirm(t('confirm_delete_web_root', path=doc_root)).ask():
                 run_command(f"sudo rm -rf {doc_root}")
                 console.print(f"[green]{t('web_root_deleted')}[/green]")
@@ -736,8 +725,8 @@ def delete_site(site_conf_name, web_server):
         # --- Revoke SSL ---
         if is_tool_installed('certbot'):
             if questionary.confirm(t('confirm_revoke_ssl', domain=domain)).ask():
-                # Use --non-interactive to avoid prompts and suppress_errors to continue if cert not found
-                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive", suppress_errors=True)
+                # Use --non-interactive to avoid prompts and allow_error to continue if cert not found
+                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive", allow_error=True)
                 console.print(f"[green]{t('ssl_revoked')}[/green]")
 
         # --- Reload web server ---
@@ -758,7 +747,7 @@ def deploy_docker_project(domain, web_root, web_server):
         console.print(f"[bold red]{t('dependency_not_found', tool='Docker')}[/bold red]")
         return
     
-    use_compose = sudo_file_exists(f"{web_root}/docker-compose.yml")
+    use_compose = os.path.exists(f"{web_root}/docker-compose.yml")
     if use_compose and not is_tool_installed('docker-compose'):
         console.print(f"[bold red]{t('dependency_not_found', tool='docker-compose')}[/bold red]")
         return
@@ -841,7 +830,7 @@ def find_php_fpm_socket():
         "/run/php/"
     ]
     for path in possible_paths:
-        if sudo_file_exists(path):
+        if os.path.exists(path):
             # Find any listening socket in the directory
             for f in os.listdir(path):
                 if f.startswith('php') and f.endswith('-fpm.sock'):

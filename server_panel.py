@@ -26,7 +26,7 @@ from app.modules.autostart import show_autostart_manager
 from app.utils import is_tool_installed
 
 # Version of the application
-__version__ = "2.6.4.7"
+__version__ = "2.6.4.10"
 
 console = Console()
 
@@ -46,7 +46,6 @@ def main_menu():
         t('menu_firewall_manager'): show_firewall_manager,
         t('menu_user_manager'): show_user_manager,
         t('menu_network_info'): show_network_toolkit,
-        t('menu_web_server_manager'): show_web_server_manager,
         t('menu_backup_manager'): show_backup_manager,
         t('menu_autostart_manager'): show_autostart_manager,
     }

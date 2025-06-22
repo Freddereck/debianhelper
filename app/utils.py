@@ -61,11 +61,11 @@ def run_command_live(command, log_filename):
                 process.wait()
                 if process.returncode != 0:
                     console.print(f"\n[bold red]Command finished with error (code {process.returncode}).[/bold red]")
-                    return None
+                    raise subprocess.CalledProcessError(process.returncode, command, output="".join(full_output))
             return "".join(full_output)
         except Exception as e:
             console.print(f"\n[bold red]Failed to execute command: {e}[/bold red]")
-            return None
+            raise
 
 def is_tool_installed(name):
     """Check whether `name` is on PATH and marked as executable."""
