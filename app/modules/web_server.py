@@ -4,7 +4,7 @@ from rich.console import Console
 import re
 
 from app.translations import t
-from app.utils import is_tool_installed, run_command, run_command_for_output
+from app.utils import is_tool_installed, run_command, run_command_for_output, sudo_file_exists
 
 console = Console()
 
@@ -215,12 +215,12 @@ def create_site_from_git(web_server):
         return
 
     # --- Project Type Detection ---
-    if os.path.exists(f"{web_root}/docker-compose.yml") or os.path.exists(f"{web_root}/Dockerfile"):
+    if sudo_file_exists(f"{web_root}/docker-compose.yml") or sudo_file_exists(f"{web_root}/Dockerfile"):
         # TODO: Implement Docker/Docker-compose deployment
         console.print("[yellow]Docker project detected. Deployment logic not yet implemented.[/yellow]")
         deploy_docker_project(domain, web_root, web_server)
 
-    elif os.path.exists(f"{web_root}/package.json"):
+    elif sudo_file_exists(f"{web_root}/package.json"):
         console.print("[yellow]Node.js project detected.[/yellow]")
         if web_server == 'nginx':
             # Slightly adapt the existing nextjs function
@@ -229,7 +229,7 @@ def create_site_from_git(web_server):
             # TODO: Implement for Apache
             console.print("[red]Node.js deployment is currently only supported for Nginx.[/red]")
 
-    elif os.path.exists(f"{web_root}/index.php"):
+    elif sudo_file_exists(f"{web_root}/index.php"):
         console.print("[yellow]PHP project detected.[/yellow]")
         # We can reuse the existing PHP site creators
         if web_server == 'nginx':
@@ -684,9 +684,9 @@ def delete_site(site_conf_name, web_server):
         if project_name and is_tool_installed('pm2'):
             console.print(t('deleting_pm2_process', name=project_name))
             # Run as the user that owns the process, likely www-data
-            # Use allow_error=True to prevent script from crashing if process not found
-            run_command(f"sudo -u www-data pm2 delete {project_name}", allow_error=True)
-            run_command("sudo -u www-data pm2 save", allow_error=True)
+            # Use suppress_errors=True to prevent script from crashing if process not found
+            run_command(f"sudo -u www-data pm2 delete {project_name}", suppress_errors=True)
+            run_command("sudo -u www-data pm2 save", suppress_errors=True)
 
 
         # --- Disable and Remove Site ---
@@ -704,14 +704,14 @@ def delete_site(site_conf_name, web_server):
             # This is a bit of a guess for older sites.
             potential_nextjs_root = f"/var/www/{project_name}"
             potential_generic_root = f"/var/www/{domain}"
-            if project_name and os.path.exists(potential_nextjs_root):
+            if project_name and sudo_file_exists(potential_nextjs_root):
                 doc_root = potential_nextjs_root
-            elif os.path.exists(potential_generic_root):
+            elif sudo_file_exists(potential_generic_root):
                 doc_root = potential_generic_root
 
 
         # --- Remove web root ---
-        if doc_root and os.path.exists(doc_root):
+        if doc_root and sudo_file_exists(doc_root):
             if questionary.confirm(t('confirm_delete_web_root', path=doc_root)).ask():
                 run_command(f"sudo rm -rf {doc_root}")
                 console.print(f"[green]{t('web_root_deleted')}[/green]")
@@ -722,8 +722,8 @@ def delete_site(site_conf_name, web_server):
         # --- Revoke SSL ---
         if is_tool_installed('certbot'):
             if questionary.confirm(t('confirm_revoke_ssl', domain=domain)).ask():
-                # Use --non-interactive to avoid prompts and allow_error to continue if cert not found
-                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive", allow_error=True)
+                # Use --non-interactive to avoid prompts and suppress_errors to continue if cert not found
+                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive", suppress_errors=True)
                 console.print(f"[green]{t('ssl_revoked')}[/green]")
 
         # --- Reload web server ---
@@ -744,7 +744,7 @@ def deploy_docker_project(domain, web_root, web_server):
         console.print(f"[bold red]{t('dependency_not_found', tool='Docker')}[/bold red]")
         return
     
-    use_compose = os.path.exists(f"{web_root}/docker-compose.yml")
+    use_compose = sudo_file_exists(f"{web_root}/docker-compose.yml")
     if use_compose and not is_tool_installed('docker-compose'):
         console.print(f"[bold red]{t('dependency_not_found', tool='docker-compose')}[/bold red]")
         return
@@ -827,7 +827,7 @@ def find_php_fpm_socket():
         "/run/php/"
     ]
     for path in possible_paths:
-        if os.path.exists(path):
+        if sudo_file_exists(path):
             # Find any listening socket in the directory
             for f in os.listdir(path):
                 if f.startswith('php') and f.endswith('-fpm.sock'):

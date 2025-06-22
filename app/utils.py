@@ -81,15 +81,27 @@ def get_uptime():
     except (IOError, ValueError):
         return "N/A"
 
-def run_command_for_output(command):
-    """A reusable utility to run a command and capture its output."""
+def run_command_for_output(command, cwd=None):
+    """Runs a command and returns its stripped standard output."""
     try:
-        result = subprocess.run(
-            command, shell=True, check=True, capture_output=True, text=True, encoding='utf-8', timeout=15
+        process = subprocess.run(
+            command,
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=cwd
         )
-        return result.stdout.strip()
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        return process.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        # Silently ignore errors for this specific function, as it's often used for checks
         return ""
+
+def sudo_file_exists(path):
+    """Checks if a file exists using sudo, bypassing permission issues."""
+    # The 'test -f' command returns exit code 0 if the file exists, 1 otherwise.
+    # We suppress errors because a non-zero exit code is expected for non-existent files.
+    return run_command(f"sudo test -f {path}", suppress_errors=True)
 
 def get_top_processes(sort_by='cpu_percent'):
     procs = []

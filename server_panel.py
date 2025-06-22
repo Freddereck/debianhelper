@@ -26,7 +26,7 @@ from app.modules.autostart import show_autostart_manager
 from app.utils import is_tool_installed
 
 # Version of the application
-__version__ = "2.6.4.4"
+__version__ = "2.6.4.5"
 
 console = Console()
 
