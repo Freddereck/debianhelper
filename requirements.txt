@@ -1,7 +1,7 @@
-rich
 questionary
+rich
+crontab
 psutil
-python-crontab
-docker
 packaging
-qrcode[pil]
+qrcode
+docker

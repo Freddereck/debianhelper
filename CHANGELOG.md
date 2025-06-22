@@ -1,6 +1,11 @@
 # Журнал изменений
 
-## [2.4] - 2024-07-26
+## [2.6.1] - 2024-07-26
+
+### 🐛 Fixed
+- **Software Manager**: Fixed a critical regression where the software management functions (for Nginx, MySQL, etc.) were not accessible due to a missing `SOFTWARE_MAP` dictionary. This has been restored, and the manager is fully functional again.
+
+## [2.6.0] - 2024-07-26
 
 ### ✨ Added
 - **Deploy from Git**: Added a major new feature to the Web Server Manager to deploy sites directly from a Git repository.

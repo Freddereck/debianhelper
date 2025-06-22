@@ -38,6 +38,12 @@
     "updater_success": "Update successful! Please restart the script.",
     "updater_failed": "Update failed. Please try again later.",
     "updater_git_pull_failed": "git pull failed. If you have local changes, please stash them first.",
+    "updater_version_error": "Could not determine local or remote version.",
+    "updater_changelog_not_found": "CHANGELOG.md file not found.",
+    "updater_no_new_changes": "Could not find new changes in CHANGELOG.md.",
+    "updater_changelog_title": "What's New",
+    "updater_pull_success": "Files updated successfully.",
+    "updater_restart_required": "Please restart the script to apply changes.",
 
     "health_title": "System Health Check",
     "health_menu_check_updates": "Check for APT Updates",

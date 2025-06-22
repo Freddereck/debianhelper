@@ -235,6 +235,23 @@ def manage_fail2ban():
             
         questionary.press_any_key_to_continue().ask()
 
+# --- Map software names to their management functions ---
+SOFTWARE_MAP = {
+    "Nginx": {"manage_func": manage_nginx, "version_cmd": "nginx -v"},
+    "Apache2": {"manage_func": manage_apache, "version_cmd": "apache2 -v"},
+    "MySQL": {"manage_func": manage_mysql, "version_cmd": "mysql --version"},
+    "PostgreSQL": {"manage_func": manage_postgresql, "version_cmd": "psql --version"},
+    "MongoDB": {"manage_func": manage_mongodb, "version_cmd": "mongod --version"},
+    "Redis": {"manage_func": manage_redis, "version_cmd": "redis-server --version"},
+    "Docker": {"manage_func": manage_docker, "version_cmd": "docker --version"}, # Assumes manage_docker is defined elsewhere
+    "Certbot": {"manage_func": manage_certbot, "version_cmd": "certbot --version"},
+    "Fail2Ban": {"manage_func": manage_fail2ban, "version_cmd": "fail2ban-client --version"},
+    "Webmin": {"manage_func": manage_webmin, "install_func": install_webmin_wizard},
+    "Nextcloud": {"install_func": install_nextcloud_wizard}, # No simple version check/manage
+    "PHPMyAdmin": {"manage_func": manage_phpmyadmin, "install_func": install_phpmyadmin_managed},
+    "3X-UI": {"manage_func": manage_3x_ui, "install_func": install_3x_ui}
+}
+
 # --- WireGuard Management (Moved from services.py) ---
 
 def generate_wg_keys():
@@ -569,74 +586,6 @@ def manage_3x_ui():
 
 # --- Main Software Manager ---
 
-SOFTWARE_CATALOG = {
-    "Nginx": {
-        "check": "nginx", "install": service_install, "manage": manage_nginx, "package_name": "nginx",
-        "version_cmd": "nginx -v 2>&1 | grep -o '[0-9.]*$'"
-    },
-    "Apache2": {
-        "check": "apache2ctl", "install": service_install, "manage": manage_apache, "package_name": "apache2",
-        "version_cmd": "apache2 -v | grep 'Server version' | awk -F'/' '{print $2}' | awk '{print $1}'"
-    },
-    "MySQL": {
-        "check": "mysql", "install": service_install, "manage": manage_mysql, "package_name": "mysql-server",
-        "version_cmd": "mysql --version | awk '{print $3}'"
-    },
-    "PostgreSQL": {
-        "check": "psql", "install": service_install, "manage": manage_postgresql, "package_name": "postgresql postgresql-contrib",
-        "version_cmd": "psql --version | awk '{print $3}'"
-    },
-    "MongoDB": {
-        "check": "mongod", "install": service_install, "manage": manage_mongodb, "package_name": "mongodb",
-        "version_cmd": "mongod --version | grep 'db version' | awk '{print $3}' | sed 's/v//'"
-    },
-    "Redis": {
-        "check": "redis-server", "install": service_install, "manage": manage_redis, "package_name": "redis-server",
-        "version_cmd": "redis-server --version | awk '{print $3}' | sed 's/v=//'"
-    },
-    "PHPMyAdmin": {
-        "check": "/usr/share/phpmyadmin", "install": install_phpmyadmin_managed, "manage": manage_phpmyadmin, "package_name": "phpmyadmin",
-        "version_cmd": "dpkg-query -W -f='${Version}' phpmyadmin 2>/dev/null" # Using dpkg for reliable version info
-    },
-    "Certbot": {
-        "check": "certbot", "install": service_install, "manage": manage_certbot, "package_name": "certbot python3-certbot-nginx",
-        "version_cmd": "certbot --version | awk '{print $2}'"
-    },
-    "Fail2ban": {
-        "check": "fail2ban-client", "install": service_install, "manage": manage_fail2ban, "package_name": "fail2ban",
-        "version_cmd": "fail2ban-client --version | awk '{print $1}'"
-    },
-    "Webmin": {
-        "check": "/etc/webmin",
-        "install": install_webmin_wizard,
-        "remove": service_uninstall,
-        "manage": manage_webmin,
-        "package_name": "webmin",
-        "version_cmd": "cat /etc/webmin/version 2>/dev/null || echo 'N/A'"
-    },
-    "WireGuard": {
-        "check": "wg", "install": service_install, "remove": service_uninstall, "manage": manage_wireguard, "package_name": "wireguard-tools",
-        "version_cmd": "wg --version | awk '{print $2}'"
-    },
-    "Docker Compose": {
-        "check": "docker-compose", "install": service_install, "manage": None, # Managed via Docker module
-        "package_name": "docker-compose",
-        "version_cmd": "docker-compose --version | awk '{print $3}' | sed 's/,$//'"
-    },
-    "Nextcloud": {
-        "check": "/var/www/html/nextcloud/version.php", "install": install_nextcloud_wizard, "manage": None, # Managed via web UI
-        "package_name": "nextcloud",
-        "version_cmd": None
-    },
-    "3X-UI": {
-        "check": "/usr/local/x-ui/x-ui",
-        "install": install_3x_ui,
-        "manage": manage_3x_ui,
-        "package_name": "3x-ui",
-        "version_cmd": "/usr/local/x-ui/x-ui version 2>/dev/null"
-    }
-}
-
 def show_software_manager():
     """Main menu for the Software Manager."""
     while True:
@@ -647,7 +596,7 @@ def show_software_manager():
         raw_choices_map = {} # To map styled string back to simple name
         
         with console.status(f"[yellow]{t('gathering_versions_status')}[/yellow]"):
-            for name, software in SOFTWARE_CATALOG.items():
+            for name, software in SOFTWARE_MAP.items():
                 check_path = software["check"]
                 # Check if it's a path or a command
                 if "/" in check_path:
@@ -683,7 +632,7 @@ def show_software_manager():
 
         # Find which software was selected
         verb, software_name = action.split(" ", 1)
-        software = SOFTWARE_CATALOG.get(software_name)
+        software = SOFTWARE_MAP.get(software_name)
 
         if software:
             if verb == 'install':
