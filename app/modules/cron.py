@@ -15,7 +15,7 @@ def get_cron_for_user():
         # CronTab(user=True) targets the current user's crontab.
         # When running with sudo, this will be root's crontab unless we specify the user.
         # For simplicity and security, we'll manage the crontab of the user running the script (root if sudo'd).
-        user_cron = CronTab(user=getpass.getuser())
+        user_cron = CronTab(user=True)
         return user_cron
     except (IOError, FileNotFoundError) as e:
         console.print(f"[bold red]{t('cron_error_permission', error=e)}[/bold red]")
