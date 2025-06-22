@@ -69,7 +69,15 @@ def check_failed_services():
         console.print(f"[green]{t('health_no_failed_services')}[/green]")
         return
 
-    failed_services = [line.split()[0] for line in failed_raw.strip().split('\n')]
+    # Filter out the '●' and empty lines, and take the first element (unit name)
+    lines = failed_raw.strip().split('\n')
+    failed_services = []
+    for line in lines:
+        parts = line.split()
+        if parts:
+            # The unit name is usually the first or second part if a '●' is present
+            unit_name = parts[1] if parts[0] == '●' else parts[0]
+            failed_services.append(unit_name)
     
     table = Table(title=t('health_failed_services_list'))
     table.add_column("Unit", style="red")

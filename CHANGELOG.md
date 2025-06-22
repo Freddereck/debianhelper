@@ -1,13 +1,31 @@
 # Журнал изменений
 
-## [2.4.1] - 2024-07-26
+## [2.4] - 2024-07-26
+
+### ✨ Added
+- **Deploy from Git**: Added a major new feature to the Web Server Manager to deploy sites directly from a Git repository.
+  - The script automatically detects the project type (Static, PHP, Node.js, Docker).
+  - For Node.js projects, it runs `npm install`, `build`, and sets up a `pm2` process.
+  - For Docker projects, it builds the image from a `Dockerfile` or uses `docker-compose`.
+  - Automatically configures Nginx as a reverse proxy for Node.js and Docker applications.
+  - Integrates fully with existing site management (SSL, deletion, etc.).
+- **Interactive Firewall Helper**: Added a user-friendly helper to the UFW manager to simplify creating common firewall rules (allowing ports/services, blocking IPs) without needing to know the exact commands.
+- **Smart Cron Job Manager**: Overhauled the Cron manager to be a full-featured, interactive wizard.
+  - Allows setting schedules via simple presets (e.g., "Every hour", "Daily") or manual cron strings.
+  - Provides options for handling command output: logging to a file, running in a `screen` session, sending email, or silent execution.
+  - Automatically generates the correct command syntax based on user choices.
+
+### 🐛 Fixed
+- **Health Check**: Fixed a bug in the "Check Failed Services" feature where service names were not displayed correctly (showing '●' instead of the name). The output from `systemctl --failed` is now parsed correctly.
+
+## [2.3.6] - 2024-07-26
 
 ### ✨ Added
 - **Autostart Manager**: Added a new module (`app/modules/autostart.py`) to manage systemd services that start on boot.
   - Users can now list all enabled startup services.
   - Users can enable or disable services from starting automatically.
 
-## [2.4.0] - 2024-06-25
+## [2.3.5] - 2024-06-25
 ### Добавлено
 - **Проверка работоспособности системы**:
   - Добавлена функция для обнаружения неработающих (`failed`) системных служб с возможностью их немедленного перезапуска.
@@ -173,4 +191,4 @@
 
 ### Добавлено
 - Первоначальный скрипт для управления сервером.
-- Базовые проверки работоспособности и мониторинг системы. 
+- Базовые проверки работоспособности и мониторинг системы.

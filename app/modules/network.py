@@ -7,8 +7,50 @@ from rich.panel import Panel
 from rich.table import Table
 import psutil
 from app.translations import t
+from app.utils import is_tool_installed, run_command
 
 console = Console()
+
+def scan_open_ports():
+    """Scans for open TCP ports on the local machine using nmap."""
+    console.clear()
+    console.print(Panel(t('network_scanning_ports'), style="bold yellow"))
+
+    if not is_tool_installed('nmap'):
+        console.print(f"[bold red]{t('nmap_not_installed_error')}[/bold red]")
+        if questionary.confirm(t('nmap_install_prompt')).ask():
+            console.print(f"[yellow]{t('installing_package', package='nmap')}...[/yellow]")
+            run_command("sudo apt-get update && sudo apt-get install -y nmap", show_output=True)
+            if not is_tool_installed('nmap'):
+                console.print(f"[bold red]{t('installation_failed', package='nmap')}[/bold red]")
+                questionary.press_any_key_to_continue().ask()
+                return
+        else:
+            return
+
+    console.print(f"[cyan]{t('nmap_running_scan')}...[/cyan]")
+    # -sT: TCP connect scan, -T4: Aggressive timing template for faster scans
+    output = run_command("sudo nmap -sT -T4 localhost")
+
+    table = Table(title=t('nmap_scan_results'))
+    table.add_column(t('nmap_col_port'), style="cyan")
+    table.add_column(t('nmap_col_state'), style="green")
+    table.add_column(t('nmap_col_service'), style="magenta")
+
+    found_ports = False
+    for line in output.split('\n'):
+        if "/tcp" in line and "open" in line:
+            found_ports = True
+            parts = [p.strip() for p in line.split() if p]
+            if len(parts) >= 3:
+                table.add_row(parts[0], parts[1], parts[2])
+    
+    if not found_ports:
+        console.print(f"[green]{t('nmap_no_open_ports')}[/green]")
+    else:
+        console.print(table)
+    
+    questionary.press_any_key_to_continue().ask()
 
 def show_connections():
     """Displays active network connections using psutil."""
@@ -102,21 +144,24 @@ def show_network_toolkit():
         console.print(Panel(t('network_toolkit_title'), style="bold blue"))
         
         choice = questionary.select(
-            "Select a tool:",
+            t('main_prompt'),
             choices=[
-                "View Active Connections",
-                "Ping Host",
-                "Traceroute Host",
-                "Back to Main Menu"
+                t('network_menu_connections'),
+                t('network_menu_ping'),
+                t('network_menu_traceroute'),
+                t('network_menu_port_scan'),
+                t('back_to_main_menu')
             ],
             pointer="👉"
         ).ask()
 
-        if choice is None or choice == "Back to Main Menu":
+        if choice is None or choice == t('back_to_main_menu'):
             break
-        elif choice == "View Active Connections":
+        elif choice == t('network_menu_connections'):
             show_connections()
-        elif choice == "Ping Host":
+        elif choice == t('network_menu_ping'):
             run_network_tool('ping', is_windows)
-        elif choice == "Traceroute Host":
-            run_network_tool('traceroute', is_windows) 
+        elif choice == t('network_menu_traceroute'):
+            run_network_tool('traceroute', is_windows)
+        elif choice == t('network_menu_port_scan'):
+            scan_open_ports() 
