@@ -123,18 +123,16 @@ def check_for_updates(on_startup=False):
 
     console.print(Panel(t('updater_version_comparison', local=local_v, remote=remote_v), style="bold yellow"))
 
-    if is_update_available:
-        console.print(Panel(t('updater_new_version_found', version=remote_v), style="bold green"))
-
-        full_changelog = get_changelog()
-        if full_changelog:
-            latest_notes = get_latest_changelog_notes(full_changelog, remote_v)
-            console.print(Panel(Markdown(latest_notes), title=t('updater_changelog_title'), border_style="cyan"))
+    if remote_v > local_v:
+        if not on_startup:
+            # Show a full panel if manually checked
+            console.print(Panel(t('updater_new_version_found', new_version=remote_v), style="bold green"))
         else:
-            console.print(f"[yellow]{t('updater_changelog_error')}[/yellow]")
-
+            # Show a more subtle message on startup
+            console.print(f"[bold green]>>[/bold green] {t('updater_new_version_found', new_version=remote_v)}")
+            
         if questionary.confirm(t('updater_prompt_update')).ask():
-            console.print(f"[yellow]{t('updater_running_pull')}[/yellow]")
+            console.print(f"[cyan]{t('updater_updating')}...[/cyan]")
             return_code = os.system("git fetch --all && git reset --hard origin/main")
             if return_code == 0:
                 console.print(f"[green]{t('updater_pull_success')}[/green]")

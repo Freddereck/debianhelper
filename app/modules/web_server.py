@@ -58,15 +58,23 @@ def show_web_server_manager():
 
         menu_options = {
             t('web_server_create_site'): lambda: create_new_site(web_server),
-            t('web_server_create_nextjs_site'): lambda: create_nextjs_site(web_server),
-            t('web_server_create_php_site'): lambda: create_php_site(web_server),
+            t('web_server_manage_sites'): lambda: manage_sites(web_server),
             t('web_server_manage_ssl'): manage_ssl,
             t('back_to_main_menu'): "exit"
         }
 
+        choices = list(menu_options.keys())
+        # Dynamically add framework-specific options
+        if web_server == 'nginx':
+            choices.insert(1, t('web_server_create_nextjs_site'))
+            menu_options[t('web_server_create_nextjs_site')] = lambda: create_nginx_nextjs_site()
+        
+        choices.insert(1, t('web_server_create_php_site'))
+        menu_options[t('web_server_create_php_site')] = lambda: create_php_site(web_server)
+
         action = questionary.select(
             t('web_server_menu_prompt'),
-            choices=list(menu_options.keys()),
+            choices=choices,
             pointer="👉"
         ).ask()
 
@@ -566,3 +574,81 @@ def manage_ssl():
     elif command == "renew":
         console.print(f"[cyan]{t('renewing_certificates')}...[/cyan]")
         run_command("sudo certbot renew --dry-run") # Use dry-run for safety 
+
+def manage_sites(web_server):
+    """Lists sites and provides management options like deletion."""
+    console.clear()
+    console.print(f"[bold blue underline]{t('manage_sites_title')}[/bold blue underline]\n")
+
+    sites = []
+    site_dir = "/etc/nginx/sites-enabled" if web_server == 'nginx' else "/etc/apache2/sites-enabled"
+    
+    try:
+        sites = [site for site in os.listdir(site_dir) if site != 'default']
+    except FileNotFoundError:
+        console.print(f"[red]{t('error_listing_sites_dir_not_found', dir=site_dir)}[/red]")
+        return
+        
+    if not sites:
+        console.print(f"[yellow]{t('no_sites_found')}[/yellow]")
+        return
+
+    sites.append(t('back'))
+    selected_site = questionary.select(t('select_site_to_manage'), choices=sites).ask()
+
+    if selected_site is None or selected_site == t('back'):
+        return
+
+    # Now show options for the selected site
+    action = questionary.select(
+        t('what_to_do_with_site', site=selected_site),
+        choices=[t('delete_site'), t('back')]
+    ).ask()
+    
+    if action == t('delete_site'):
+        delete_site(selected_site, web_server)
+
+def delete_site(site_conf_name, web_server):
+    """Deletes a website."""
+    domain = site_conf_name.replace('.conf', '') if '.conf' in site_conf_name else site_conf_name
+    
+    if not questionary.confirm(t('confirm_delete_site', site=domain)).ask():
+        console.print(f"[red]{t('operation_cancelled')}[/red]")
+        return
+        
+    console.print(f"[cyan]{t('deleting_site', site=domain)}...[/cyan]")
+
+    try:
+        # Step 1: Disable site
+        if web_server == 'nginx':
+            run_command(f"sudo rm /etc/nginx/sites-enabled/{site_conf_name}")
+        else: # apache
+            run_command(f"sudo a2dissite {site_conf_name}")
+
+        # Step 2: Remove config file
+        conf_path = f"/etc/{web_server}/{'sites-available' if web_server == 'nginx' else 'sites-available'}/{site_conf_name}"
+        run_command(f"sudo rm {conf_path}")
+        console.print(f"[green]{t('site_disabled_and_config_removed')}[/green]")
+        
+        # Step 3: Ask to remove web root
+        doc_root = f"/var/www/{domain}" # This is a guess, should parse from config in future
+        if os.path.exists(doc_root):
+            if questionary.confirm(t('confirm_delete_web_root', path=doc_root)).ask():
+                run_command(f"sudo rm -rf {doc_root}")
+                console.print(f"[green]{t('web_root_deleted')}[/green]")
+
+        # Step 4: Ask to revoke SSL
+        if is_tool_installed('certbot'):
+            # This assumes cert name matches domain.
+            if questionary.confirm(t('confirm_revoke_ssl', domain=domain)).ask():
+                run_command(f"sudo certbot delete --cert-name {domain} --non-interactive")
+                console.print(f"[green]{t('ssl_revoked')}[/green]")
+
+        # Step 5: Reload web server
+        reload_cmd = "sudo systemctl reload nginx" if web_server == 'nginx' else "sudo systemctl reload apache2"
+        run_command(reload_cmd)
+        
+        console.print(f"[bold green]{t('site_deleted_successfully', site=domain)}[/bold green]")
+        
+    except Exception as e:
+        console.print(f"[bold red]{t('error_deleting_site', error=e)}[/bold red]") 

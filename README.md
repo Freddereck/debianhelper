@@ -4,30 +4,30 @@
 
 Меня это тоже достало. Поэтому я накидал на коленке этот скрипт на Python. Это не какая-то навороченная панель с графиками и свистелками. Это простая менюшка прямо в твоей консоли, чтобы делать самые частые вещи, не ломая голову и пальцы. Запустил, выбрал стрелочками, нажал Enter. Всё.
 
-## Server Panel
+## Возможности
 
-A modular, console-based server administration tool written in Python.
-
-## Features
-
-- **System Health Check**: Check for APT updates and perform system cleanup.
-- **Service Manager**: Start, stop, restart, and manage systemd services.
-- **Docker Manager**: Manage Docker containers, including start, stop, logs, and system prune.
-- **Software Manager**: A centralized place to install/uninstall and manage common software like Webmin.
-- **System Monitor**: A live, `htop`-like dashboard showing CPU, RAM, Disk, and process information.
-- **Security Audit**: Manage Fail2Ban and view network connections.
-- **Developer Tools**: Quick access to install and manage development tools like MySQL.
-- **Web Server Manager**:
-  - Automatically detects and manages **Nginx** and **Apache**.
-  - **Site Creation**:
-    - Static HTML sites.
-    - PHP sites with automatic PHP-FPM configuration.
-    - Node.js sites (Next.js) with PM2 process management and reverse proxy setup.
-  - **SSL Management**:
-    - Integrated Let's Encrypt (`certbot`) support.
-    - Automatically request and install SSL certificates for any created site.
-    - Manage existing certificates (list, renew).
-- **And more...**: Includes managers for Cron jobs, logs, packages, users, firewall (UFW/iptables), PM2, and network tools.
+- **Проверка здоровья системы**: Проверка обновлений APT и очистка системы.
+- **Менеджер служб**: Запуск, остановка, перезапуск и управление службами systemd.
+- **Менеджер Docker**: Управление контейнерами Docker, включая запуск, остановку, просмотр логов и очистку системы.
+- **Менеджер ПО**: Централизованная установка/удаление и управление популярным ПО, таким как Webmin.
+- **Монитор системы**: Панель мониторинга в реальном времени, подобная `htop`, отображающая информацию о процессоре, ОЗУ, диске и процессах.
+- **Аудит безопасности**: Управление Fail2Ban и просмотр сетевых подключений.
+- **Инструменты разработчика**: Быстрый доступ к установке и управлению инструментами разработки, такими как MySQL.
+- **Менеджер веб-сервера**:
+  - Автоматическое определение и управление **Nginx** и **Apache**.
+  - **Создание сайтов**:
+    - Статические HTML-сайты.
+    - PHP-сайты с автоматической настройкой PHP-FPM.
+    - Сайты на Node.js (Next.js) с управлением процессами через PM2 и настройкой обратного прокси.
+  - **Управление SSL**:
+    - Встроенная поддержка Let's Encrypt (`certbot`).
+    - Автоматический запрос и установка SSL-сертификатов для любого созданного сайта.
+    - Управление существующими сертификатами (просмотр, продление).
+- **И многое другое...**: Включает менеджеры для Cron, логов, пакетов, пользователей, брандмауэра (UFW/iptables), PM2 и сетевых инструментов.
+- **Менеджер бэкапов**:
+  - Создание бэкапов файлов и директорий в `.tar.gz`.
+  - Создание бэкапов баз данных MySQL в `.sql.gz`.
+  - Просмотр существующих бэкапов.
 
 ## Как эту штуку завести?
 
@@ -60,27 +60,7 @@ A modular, console-based server administration tool written in Python.
 
 Если есть идеи, как сделать лучше, или нашёл баг — можешь написать в Issues. Может быть, я даже посмотрю, если не будет лень.
 
-Удачи. 
+Удачи.
 
-## Installation / Usage
-
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/Freddereck/server-panel.git
-    ```
-2.  Navigate to the directory:
-    ```bash
-    cd server-panel
-    ```
-3.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  Run the script:
-    ```bash
-    python server_panel.py
-    ```
-It is recommended to run the script with `sudo` as many functions require root privileges.
-
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change. 
+## Участие в разработке
+Pull request'ы приветствуются. Для серьезных изменений, пожалуйста, сначала создайте issue, чтобы обсудить, что вы хотите изменить. 

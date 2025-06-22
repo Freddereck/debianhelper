@@ -1,142 +1,148 @@
-# Changelog
+# Журнал изменений
 
-## [2.3.0] - YYYY-MM-DD
+## [2.3.1] - 2024-06-25
+### Добавлено
+- **Менеджер бэкапов**:
+  - Новый модуль (`backup.py`) добавлен в главное меню.
+  - Возможность создавать бэкапы отдельных файлов или целых директорий в виде архива `.tar.gz`.
+  - Возможность создавать бэкапы баз данных MySQL с помощью `mysqldump` и сохранять их в сжатом формате `.sql.gz`.
+  - Возможность просмотра списка существующих бэкапов в указанной директории.
 
-### Added
-- **Web Server Manager**: A major new module for web server management.
-  - Automatically detects installed servers (Nginx, Apache).
-  - Allows choosing which server to manage if both are installed.
-- **Nginx Support**:
-  - Create simple static HTML sites.
-  - Create and deploy Next.js applications with PM2 and reverse proxy.
-  - Create PHP sites with automatic PHP-FPM configuration.
-- **Apache Support**:
-  - Create simple static HTML sites.
-  - Create PHP sites with automatic PHP-FPM configuration (`proxy_fcgi`).
-  - *Next.js support for Apache is planned for a future release.*
-- **SSL Management (Let's Encrypt)**:
-  - Integrated `certbot` support.
-  - Option to request and install a free SSL certificate after creating any site.
-  - Automatic configuration of HTTPS redirection.
-  - A separate menu to list and test renewal of existing certificates.
+### Исправлено
+- **Обновление**: Исправлена критическая ошибка `KeyError: 'version'`, которая возникала в модуле обновления (`updater.py`), если `CHANGELOG.md` не содержал секции `[Unreleased]`. Теперь парсер корректно обрабатывает лог, даже если эта секция отсутствует.
 
-### Changed
-- Refactored the entire `web_server.py` module to be modular and support multiple web servers.
-- The main menu now conditionally shows the "Web Server Manager" option.
+## [2.3.0] - 2024-06-25
+
+### Добавлено
+- **Менеджер веб-сервера**: Крупный новый модуль для управления веб-сервером.
+  - Автоматически определяет установленные серверы (Nginx, Apache).
+  - Позволяет выбрать, каким сервером управлять, если установлены оба.
+- **Поддержка Nginx**:
+  - Создание простых статичных сайтов HTML.
+  - Создание и развертывание приложений Next.js с PM2 и обратным прокси.
+  - Создание сайтов на PHP с автоматической настройкой PHP-FPM.
+- **Поддержка Apache**:
+  - Создание простых статичных сайтов HTML.
+  - Создание сайтов на PHP с автоматической настройкой PHP-FPM (`proxy_fcgi`).
+  - *Поддержка Next.js для Apache планируется в будущем.*
+- **Управление SSL (Let's Encrypt)**:
+  - Интегрирована поддержка `certbot`.
+  - Опция для запроса и установки бесплатного SSL-сертификата после создания любого сайта.
+  - Автоматическая настройка HTTPS-редиректа.
+  - Отдельное меню для просмотра и тестирования продления существующих сертификатов.
+
+### Изменено
+- Проведен рефакторинг всего модуля `web_server.py` для поддержки нескольких веб-серверов.
+- В главном меню теперь условно отображается опция "Менеджер веб-сервера".
 
 ---
 
-## [2.2.5] - 2025-06-24
+## [2.2.5] - 2024-06-24
 
-### Added
-- **Software Manager**: Added the ability to completely uninstall WireGuard (`wireguard-tools` package) through the manager interface, which was previously missing.
+### Добавлено
+- **Менеджер ПО**: Добавлена возможность полного удаления WireGuard (пакет `wireguard-tools`) через интерфейс менеджера.
 
-## [2.2.4] - 2025-06-24
+## [2.2.4] - 2024-06-24
 
-### Fixed
-- **Localization**: Added missing Russian and English translations for the Webmin management feature and for common service control actions and statuses.
+### Исправлено
+- **Локализация**: Добавлены недостающие русские и английские переводы для функции управления Webmin и для общих действий и статусов управления службами.
 
-## [2.2.3] - 2025-06-24
+## [2.2.3] - 2024-06-24
 
-### Added
-- **Software Manager**:
-    - Added comprehensive management for **Webmin**. Includes a guided installer that sets up the official repository, an uninstaller, and a management menu to control the `webmin` service and view the access URL.
+### Добавлено
+- **Менеджер ПО**:
+    - Добавлено комплексное управление для **Webmin**. Включает в себя установщик с настройкой официального репозитория, деинсталлятор и меню управления для контроля службы `webmin` и просмотра URL-адреса доступа.
 
-### Changed
-- **Major Refactor (Services & Software)**:
-    - **WireGuard** management has been logically moved from the "Service Manager" to the "Software Manager" for better consistency.
-    - The "Service Manager" module has been simplified. It no longer contains specific application logic and now serves as a general-purpose viewer for the status of all `systemd` services, providing a clearer, more focused utility.
-- **Updater**:
-    - The update checker has been significantly improved. It now parses the `CHANGELOG.md` and displays only the notes for the latest available version, rather than showing the entire file. This makes update information much more concise and user-friendly.
+### Изменено
+- **Крупный рефакторинг (Службы и ПО)**:
+    - Управление **WireGuard** было логически перенесено из "Менеджера служб" в "Менеджер ПО" для большей согласованности.
+    - Модуль "Менеджер служб" был упрощен. Теперь он не содержит специфической логики приложений и служит в качестве универсального просмотрщика статуса всех служб `systemd`.
+- **Обновление**:
+    - Механизм проверки обновлений был значительно улучшен. Теперь он парсит `CHANGELOG.md` и отображает заметки только для последней доступной версии, а не весь файл.
 
-## [2.2.2] - 2025-06-23
+## [2.2.2] - 2024-06-23
 
-### Added
-- **Developer Tools**:
-    - The "Developer Tools" module has been significantly enhanced.
-    - Added a comprehensive manager for **Node.js** using **NVM** (Node Version Manager).
-    - The panel can now install NVM if it's not present.
-    - Implemented features to install different Node.js versions and list installed versions.
-    - Added a direct option to install or update **PM2** globally via NPM within the Node.js manager.
-- **Software Manager Features**:
-    - **Nginx**: Added a feature to list all configured sites from `/etc/nginx/sites-enabled`.
-    - **MySQL & PostgreSQL**: Added the ability to list all databases.
-    - **Certbot**: Added a feature to list all existing SSL certificates.
-    - **Fail2Ban**: Added full management support, including listing jails, checking status, and a utility to unban IP addresses.
-    - **Docker Compose**: Added installation support for Docker Compose.
-- **Docker Module**:
-    - Integrated **Docker Compose** management directly into the Docker module.
-    - Users can now point to a project directory and run `up`, `down`, `ps`, and `logs` commands on a `docker-compose.yml` file.
-- **Nextcloud**: Laid the groundwork for a future "Nextcloud Installation Wizard" with a placeholder menu item.
+### Добавлено
+- **Инструменты разработчика**:
+    - Значительно расширен модуль "Инструменты разработчика".
+    - Добавлен комплексный менеджер для **Node.js** с использованием **NVM**.
+    - Панель теперь может устанавливать NVM, если он отсутствует.
+    - Реализованы функции для установки различных версий Node.js и просмотра установленных версий.
+    - Добавлена прямая опция для установки или обновления **PM2** глобально через NPM.
+- **Возможности Менеджера ПО**:
+    - **Nginx**: Добавлена функция для вывода списка всех настроенных сайтов из `/etc/nginx/sites-enabled`.
+    - **MySQL & PostgreSQL**: Добавлена возможность вывода списка всех баз данных.
+    - **Certbot**: Добавлена функция для вывода списка всех существующих SSL-сертификатов.
+    - **Fail2Ban**: Добавлена полная поддержка управления, включая просмотр "тюрем", проверку статуса и утилиту для разбана IP-адресов.
+    - **Docker Compose**: Добавлена поддержка установки Docker Compose.
+- **Модуль Docker**:
+    - Интегрировано управление **Docker Compose** непосредственно в модуль Docker.
+    - Пользователи теперь могут указать на директорию проекта и выполнять команды `up`, `down`, `ps` и `logs` для файла `docker-compose.yml`.
+- **Nextcloud**: Подготовлена основа для будущего "Мастера установки Nextcloud" с пунктом меню-заполнителем.
 
-### Changed
+### Изменено
 - **UI/UX**:
-    - The Software Manager menu is now more informative. It displays `[Manage]` or `[Install]` prefixes for clarity.
-    - For installed software, the panel now attempts to detect and display the current version number (e.g., `Nginx (v1.18.0)`).
-- **Code Structure**: The "Developer Tools" module is now the dedicated home for managing development environments like Node.js and Java.
+    - Меню Менеджера ПО стало более информативным. Оно отображает префиксы `[Управлять]` или `[Установить]`.
+    - Для установленного ПО панель теперь пытается определить и отобразить текущую версию (например, `Nginx (v1.18.0)`).
+- **Структура кода**: Модуль "Инструменты разработчика" теперь является специальным местом для управления средами разработки, такими как Node.js и Java.
 
-### Fixed
-- **3X-UI Detection**: Corrected the file path used to check for an existing 3X-UI installation, ensuring more reliable detection. Added a command to fetch its version.
+### Исправлено
+- **Обнаружение 3X-UI**: Исправлен путь к файлу, используемый для проверки существующей установки 3X-UI. Добавлена команда для получения его версии.
 
-## [2.2.1] - 2025-06-22
+## [2.2.1] - 2024-06-22
 
-### Added
-- **Major Feature: Software Manager**: A new centralized module (`app/modules/software_manager.py`) for installing and managing various services. The menu dynamically shows "Install" or "Manage" based on the software's installation status.
-- **Nginx & Apache2**: Added full management support (status, restart, reload, config test, uninstall).
-- **Databases**: Added management for **MySQL**, **PostgreSQL**, and **MongoDB**.
-- **In-Memory Store**: Added management for **Redis**.
-- **Custom Installers**:
-    - **3X-UI**: Added a custom installer and manager for the 3X-UI panel.
-    - **PHPMyAdmin**: Added a guided installer with dependency checks.
-    - **Certbot (Let's Encrypt)**: Added an installer and manager to obtain SSL certificates using the Nginx plugin.
-- **Utilities**: Added a universal `is_tool_installed` function in `app/utils.py` and improved installation checks to support both PATH commands and direct file paths.
-- **Localization**: Added dozens of new translation keys in `ru.json` and `en.json` to support all new features.
+### Добавлено
+- **Главная функция: Менеджер ПО**: Новый централизованный модуль (`app/modules/software_manager.py`) для установки и управления различными службами. Меню динамически показывает "Установить" или "Управлять" в зависимости от статуса установки ПО.
+- **Nginx & Apache2**: Добавлена полная поддержка управления (статус, перезапуск, перезагрузка, тест конфигурации, удаление).
+- **Базы данных**: Добавлено управление для **MySQL**, **PostgreSQL** и **MongoDB**.
+- **Хранилище в памяти**: Добавлено управление для **Redis**.
+- **Пользовательские установщики**:
+    - **3X-UI**: Добавлен пользовательский установщик и менеджер для панели 3X-UI.
+    - **PHPMyAdmin**: Добавлен управляемый установщик с проверкой зависимостей.
+    - **Certbot (Let's Encrypt)**: Добавлен установщик и менеджер для получения SSL-сертификатов с использованием плагина Nginx.
+- **Утилиты**: Добавлена универсальная функция `is_tool_installed` в `app/utils.py` и улучшены проверки установки для поддержки как команд из PATH, так и прямых путей к файлам.
+- **Локализация**: Добавлены десятки новых ключей перевода в `ru.json` и `en.json` для поддержки всех новых функций.
 
-### Changed
-- **Main Menu**: The menu now features a "Software Manager" entry, consolidating all service management.
-- **PM2 Manager**: The menu item for the PM2 manager is now conditional and only appears if PM2 is actually installed.
-- **Code Structure**:
-    - The old `app/modules/web_server.py` has been removed.
-    - Logic for MySQL and PHPMyAdmin has been migrated from `dev_tools.py` to the new `software_manager.py`.
-    - The `dev_tools.py` module is now leaner, containing only the Java installer.
+### Изменено
+- **Главное меню**: В меню теперь есть пункт "Менеджер ПО", объединяющий все управление службами.
+- **Менеджер PM2**: Пункт меню для менеджера PM2 теперь является условным и появляется только в том случае, если PM2 действительно установлен.
+- **Структура кода**:
+    - Старый `app/modules/web_server.py` был удален.
+    - Логика для MySQL и PHPMyAdmin была перенесена из `dev_tools.py` в новый `software_manager.py`.
+    - Модуль `dev_tools.py` теперь стал более компактным и содержит только установщик Java.
 
-### Fixed
-- **Missing functionality**: Re-implemented the lost "MySQL Manager" functionality and greatly expanded it.
+### Исправлено
+- **Отсутствующая функциональность**: Повторно реализована утерянная функциональность "Менеджера MySQL" и значительно расширена.
 
-## [2.1.4] - 2025-06-21
+## [2.1.4] - 2024-06-21
 
-### Added
+### Добавлено
 - **Docker:** Реализован просмотр списка локальных Docker-образов.
 - **Firewall:** Добавлена проверка статуса UFW и инструкции по установке, если он отсутствует.
 - **Localization:** Добавлены многочисленные переводы для модулей Firewall, WireGuard, Network, Users и Docker.
 
-### Changed
+### Изменено
 - **UI:** Полностью переработан дизайн главного меню для более современного и удобного вида. Добавлен копирайт.
 - **System Monitor:** Интерфейс полностью переделан, чтобы быть более похожим на `htop`, с единой таблицей процессов и наглядными индикаторами нагрузки вверху.
 - **Updater:** Механизм обновления полностью переписан для использования GitHub API, что значительно повысило его надежность. Исправлена критическая ошибка, когда скрипт не мог обновиться.
 
-### Fixed
+### Исправлено
 - **Cron:** Исправлена критическая ошибка, приводившая к падению приложения при входе в менеджер Cron.
 - **Hardcoded Strings:** Заменены жестко закодированные строки на ключи локализации в модулях Network и Users.
 
-## [Unreleased]
-
-### Added
-- First draft of the changelog.
-
 ## [2.0.0] - 2023-10-27
 
-### Added
-- Complete project refactoring into modules.
-- Language selection (English/Russian).
-- Self-update mechanism via Git.
-- Docker, Services, Security, Health, and Monitor modules.
+### Добавлено
+- Полный рефакторинг проекта на модули.
+- Выбор языка (английский/русский).
+- Механизм самообновления через Git.
+- Модули Docker, Services, Security, Health и Monitor.
 
-### Changed
-- Improved UI with `rich` and `questionary`.
+### Изменено
+- Улучшен пользовательский интерфейс с помощью `rich` и `questionary`.
 
 ## [1.0.0] - 2023-10-26
 
-### Added
-- Initial script for server management.
-- Basic health checks and system monitoring. 
+### Добавлено
+- Первоначальный скрипт для управления сервером.
+- Базовые проверки работоспособности и мониторинг системы. 
