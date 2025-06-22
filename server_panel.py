@@ -20,10 +20,11 @@ from app.modules.users import show_user_manager
 from app.modules.network import show_network_toolkit
 from app.modules.pm2 import show_pm2_manager
 from app.modules.software_manager import show_software_manager
+from app.modules.web_server import show_web_server_manager
 from app.utils import is_tool_installed
 
 # Version of the application
-__version__ = "2.2.5"
+__version__ = "2.2.5.1"
 
 console = Console()
 
@@ -45,6 +46,7 @@ def main_menu():
         t('menu_firewall_manager'): show_firewall_manager,
         t('menu_user_manager'): show_user_manager,
         t('menu_network_info'): show_network_toolkit,
+        t('menu_web_server_manager'): show_web_server_manager,
     }
 
     # Conditionally add PM2 manager if installed
