@@ -11,8 +11,70 @@ from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
 from localization import get_string
 from modules.panel_utils import clear_console, run_command
+import re
 
 console = Console()
+
+def _get_pterodactyl_info():
+    # Статус nginx
+    nginx_status = run_command_with_dpkg_fix('systemctl is-active nginx')
+    nginx_status_str = nginx_status.stdout.strip() if nginx_status and nginx_status.returncode == 0 else 'unknown'
+    # Статус pteroq
+    pteroq_status = run_command_with_dpkg_fix('systemctl is-active pteroq.service')
+    pteroq_status_str = pteroq_status.stdout.strip() if pteroq_status and pteroq_status.returncode == 0 else 'unknown'
+    # Определение URL панели
+    url = None
+    port = None
+    ssl = False
+    domain = None
+    nginx_conf = '/etc/nginx/sites-available/pterodactyl.conf'
+    if os.path.exists(nginx_conf):
+        with open(nginx_conf, 'r') as f:
+            conf = f.read()
+            m = re.search(r'server_name\s+([^;\s]+)', conf)
+            if m:
+                domain = m.group(1)
+            m2 = re.search(r'listen\s+(\d+)(?:\s+ssl)?', conf)
+            if m2:
+                port = m2.group(1)
+            if 'ssl_certificate' in conf:
+                ssl = True
+    # Получить IP сервера
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+    except Exception:
+        ip = '127.0.0.1'
+    # Сформировать URL
+    if domain:
+        url = f"{'https' if ssl else 'http'}://{domain}"
+        if port and port not in ('80', '443'):
+            url += f":{port}"
+    else:
+        url = f"{'https' if ssl else 'http'}://{ip}"
+        if port and port not in ('80', '443'):
+            url += f":{port}"
+    # Данные БД (если есть)
+    db_info = None
+    db_path = '/var/www/pterodactyl/.env'
+    if os.path.exists(db_path):
+        with open(db_path) as f:
+            env = f.read()
+            db_user = re.search(r'DB_USERNAME=(.*)', env)
+            db_pass = re.search(r'DB_PASSWORD=(.*)', env)
+            db_name = re.search(r'DB_DATABASE=(.*)', env)
+            if db_user and db_pass and db_name:
+                db_info = f"{db_name.group(1)} / {db_user.group(1)} / {db_pass.group(1)}"
+    # Данные админа (если создавались автоматически — можно хранить в отдельном файле)
+    admin_info = None # (можно реализовать сохранение при автоматическом создании)
+    return {
+        'nginx': nginx_status_str,
+        'pteroq': pteroq_status_str,
+        'url': url,
+        'port': port,
+        'ssl': ssl,
+        'db': db_info,
+        'admin': admin_info
+    }
 
 def pterodactyl_manage_menu():
     clear_console()
@@ -29,7 +91,14 @@ def pterodactyl_manage_menu():
         return
     while True:
         clear_console()
-        console.print(Panel("[bold cyan]Управление Pterodactyl[/bold cyan]", title="Pterodactyl Panel", border_style="cyan"))
+        info = _get_pterodactyl_info()
+        status_panel = f"[bold]Статус nginx:[/bold] [cyan]{info['nginx']}[/cyan]  |  [bold]pteroq:[/bold] [cyan]{info['pteroq']}[/cyan]\n"
+        status_panel += f"[bold]URL панели:[/bold] [green]{info['url']}[/green]  |  [bold]Порт:[/bold] [cyan]{info['port'] or '80/443'}[/cyan]  |  [bold]SSL:[/bold] [cyan]{'да' if info['ssl'] else 'нет'}[/cyan]\n"
+        if info['db']:
+            status_panel += f"[bold]БД:[/bold] [magenta]{info['db']}[/magenta]\n"
+        if info['admin']:
+            status_panel += f"[bold]Админ:[/bold] [magenta]{info['admin']}[/magenta]\n"
+        console.print(Panel(status_panel, title="Pterodactyl Panel", border_style="cyan"))
         choices = [
             "Открыть веб-панель",
             "Artisan-команды",
@@ -42,8 +111,8 @@ def pterodactyl_manage_menu():
         ]
         action = inquirer.select(message="Выберите действие:", choices=choices).execute()
         if action == "Открыть веб-панель":
+            url = info['url'] or inquirer.text(message="Введите URL панели (например, https://your-domain):", default="https://127.0.0.1").execute()
             import webbrowser
-            url = inquirer.text(message="Введите URL панели (например, https://your-domain):", default="https://127.0.0.1").execute()
             webbrowser.open(url)
             console.print(f"[green]Открыто в браузере: {url}[/green]")
             inquirer.text(message="Enter для возврата в меню...").execute()
@@ -107,6 +176,62 @@ def pterodactyl_manage_menu():
                 break
         elif action == "Назад":
             break
+
+def _ensure_nginx_pterodactyl(domain=None, ssl=False):
+    import subprocess
+    nginx_conf_path = '/etc/nginx/sites-available/pterodactyl.conf'
+    nginx_enabled_path = '/etc/nginx/sites-enabled/pterodactyl.conf'
+    if not domain:
+        # Попробовать получить из .env
+        env_path = '/var/www/pterodactyl/.env'
+        if os.path.exists(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith('APP_URL='):
+                        domain = line.strip().split('=',1)[1].replace('https://','').replace('http://','').split(':')[0]
+                        break
+    if not domain:
+        domain = inquirer.text(message="Введите домен для панели (или IP):", default="panel.example.com").execute()
+    # Генерируем конфиг
+    conf = f'''
+server {{
+    listen 80;
+    server_name {domain};
+    root /var/www/pterodactyl/public;
+    index index.php index.html index.htm;
+    location / {{
+        try_files $uri $uri/ /index.php?$query_string;
+    }}
+    location ~ \.(php|phar)(/|$) {{
+        fastcgi_split_path_info ^(.+?\.ph(?:p|ar))(/.*)$;
+        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param HTTP_PROXY "";
+        internal;
+    }}
+    location ~ /\.ht {{
+        deny all;
+    }}
+    client_max_body_size 100m;
+    sendfile off;
+}}
+'''
+    with open(nginx_conf_path, 'w') as f:
+        f.write(conf)
+    # Симлинк
+    if not os.path.exists(nginx_enabled_path):
+        os.symlink(nginx_conf_path, nginx_enabled_path)
+    # Проверка nginx -t
+    result = subprocess.run(['nginx', '-t'], capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(Panel(f"[red]Ошибка в конфиге nginx:[/red]\n{result.stderr}", title="nginx -t error", border_style="red"))
+        raise Exception("nginx config error")
+    # Перезапуск nginx
+    subprocess.run(['systemctl', 'reload', 'nginx'])
+    console.print(Panel(f"[green]nginx сконфигурирован для панели {domain} и перезапущен![/green]", title="nginx", border_style="green"))
 
 def pterodactyl_install_wizard():
     import distro
@@ -328,41 +453,7 @@ def pterodactyl_install_wizard():
     inquirer.text(message="Enter для продолжения...").execute()
 
     # 17. Инструкция по nginx
-    nginx_conf = (
-        '[bold]Настройте nginx для панели![/bold]\n\nПример SSL-конфига (замените <domain>):\n\n[cyan]rm /etc/nginx/sites-enabled/default\ncat > /etc/nginx/sites-available/pterodactyl.conf <<EOF\nserver {\n    listen 80;\n    server_name <domain>;\n    return 301 https://$server_name$request_uri;\n}\nserver {\n    listen 443 ssl http2;\n    server_name <domain>;\n    root /var/www/pterodactyl/public;\n    index index.php;\n    access_log /var/log/nginx/pterodactyl.app-access.log;\n    error_log  /var/log/nginx/pterodactyl.app-error.log error;\n    client_max_body_size 100m;\n    client_body_timeout 120s;\n    sendfile off;\n    ssl_certificate /etc/letsencrypt/live/<domain>/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/<domain>/privkey.pem;\n    ssl_session_cache shared:SSL:10m;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers '
-        'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:'
-        'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:'
-        'ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:'
-        'DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384'
-        ';\n'
-        '    ssl_prefer_server_ciphers on;\n'
-        '    add_header X-Content-Type-Options nosniff;\n'
-        '    add_header X-XSS-Protection "1; mode=block";\n'
-        '    add_header X-Robots-Tag none;\n'
-        '    add_header Content-Security-Policy "frame-ancestors \'self\'";\n'
-        '    add_header X-Frame-Options DENY;\n'
-        '    add_header Referrer-Policy same-origin;\n'
-        '    location / {\n        try_files $uri $uri/ /index.php?$query_string;\n    }\n'
-        '    location ~ \\.php$ {\n'
-        '        fastcgi_split_path_info ^(.+\\.php)(/.+)$;\n'
-        '        fastcgi_pass unix:/run/php/php8.3-fpm.sock;\n'
-        '        fastcgi_index index.php;\n'
-        '        include fastcgi_params;\n'
-        '        fastcgi_param PHP_VALUE "upload_max_filesize = 100M \\n post_max_size=100M";\n'
-        '        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n'
-        '        fastcgi_param HTTP_PROXY "";\n'
-        '        fastcgi_intercept_errors off;\n'
-        '        fastcgi_buffer_size 16k;\n'
-        '        fastcgi_buffers 4 16k;\n'
-        '        fastcgi_connect_timeout 300;\n'
-        '        fastcgi_send_timeout 300;\n'
-        '        fastcgi_read_timeout 300;\n'
-        '        include /etc/nginx/fastcgi_params;\n'
-        '    }\n'
-        '    location ~ /\\.ht {\n        deny all;\n    }\n}\nEOF\nln -s /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf\nsystemctl restart nginx[/cyan]\n\n[bold yellow]Не забудьте получить SSL-сертификат через certbot или другой способ![/bold yellow]'
-    )
-    console.print(Panel(nginx_conf, title="Шаг 16: Nginx", border_style="yellow"))
-    inquirer.text(message="Нажмите Enter, когда nginx будет настроен и перезапущен...").execute()
+    _ensure_nginx_pterodactyl()
 
     # 18. Инструкция по крону и systemd
     console.print(Panel("[bold]Добавьте крон и systemd unit для очереди![/bold]\n\n[cyan]crontab -e[/cyan]\n* * * * * php /var/www/pterodactyl/artisan schedule:run >> /dev/null 2>&1\n\n[cyan]cat > /etc/systemd/system/pteroq.service <<EOF\n[Unit]\nDescription=Pterodactyl Queue Worker\nAfter=redis-server.service\n[Service]\nUser=www-data\nGroup=www-data\nRestart=always\nExecStart=/usr/bin/php /var/www/pterodactyl/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3\nStartLimitInterval=180\nStartLimitBurst=30\nRestartSec=5s\n[Install]\nWantedBy=multi-user.target\nEOF\nsystemctl enable --now pteroq.service[/cyan]", title="Шаг 17: Крон и systemd", border_style="yellow"))
@@ -372,43 +463,93 @@ def pterodactyl_install_wizard():
     console.print(Panel("[bold green]Установка Pterodactyl завершена![/bold green]\n\nПанель доступна по адресу вашего домена.\n\n[cyan]Документация: https://pterodactyl.io/panel/1.11/getting_started.html[/cyan]", title="Готово!", border_style="green"))
     inquirer.text(message="Нажмите Enter для выхода...").execute()
 
+    # После установки файлов панели и .env:
+    _ensure_nginx_pterodactyl()
+
+def _remove_pterodactyl_cron():
+    import subprocess
+    try:
+        res = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+        if res.returncode != 0 or not res.stdout:
+            console.print("[yellow]Крон-задач не найдено или crontab пуст.[/yellow]")
+            return
+        lines = res.stdout.splitlines()
+        new_lines = [l for l in lines if 'php /var/www/pterodactyl/artisan schedule:run' not in l]
+        if len(new_lines) == len(lines):
+            console.print("[yellow]Крон-задача Pterodactyl не найдена.[/yellow]")
+            return
+        new_cron = '\n'.join(new_lines) + '\n' if new_lines else ''
+        p = subprocess.run(['crontab', '-'], input=new_cron, text=True)
+        if p.returncode == 0:
+            console.print("[green]Крон-задача Pterodactyl удалена![/green]")
+        else:
+            console.print("[red]Ошибка при удалении крон-задачи![/red]")
+    except Exception as e:
+        console.print(f"[red]Ошибка при работе с crontab: {e}[/red]")
+
+def _remove_pterodactyl_db():
+    import subprocess
+    import re
+    db_user = 'pterodactyl'
+    db_name = 'panel'
+    # Попробовать получить пароль из .env
+    env_path = '/var/www/pterodactyl/.env'
+    db_pass = None
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            env = f.read()
+            m = re.search(r'DB_PASSWORD=(.*)', env)
+            if m:
+                db_pass = m.group(1).strip()
+            m2 = re.search(r'DB_DATABASE=(.*)', env)
+            if m2:
+                db_name = m2.group(1).strip()
+            m3 = re.search(r'DB_USERNAME=(.*)', env)
+            if m3:
+                db_user = m3.group(1).strip()
+    # Пробуем через socket
+    sql = f"DROP DATABASE IF EXISTS {db_name}; DROP USER IF EXISTS '{db_user}'@'127.0.0.1'; FLUSH PRIVILEGES;"
+    res = subprocess.run(['mariadb', '-u', 'root', '--execute', sql], capture_output=True, text=True)
+    if res.returncode == 0:
+        console.print(f"[green]База данных и пользователь {db_name}/{db_user} удалены![/green]")
+        return
+    # Если не получилось — спросить пароль
+    root_pass = inquirer.text(message="MariaDB root-пароль (оставьте пустым для пропуска):").execute()
+    if not root_pass:
+        console.print("[yellow]Пропущено удаление БД: не удалось подключиться к MariaDB.[/yellow]")
+        return
+    res2 = subprocess.run(['mariadb', '-u', 'root', f'-p{root_pass}', '--execute', sql], capture_output=True, text=True)
+    if res2.returncode == 0:
+        console.print(f"[green]База данных и пользователь {db_name}/{db_user} удалены![/green]")
+    else:
+        console.print(f"[yellow]Не удалось удалить БД автоматически. Проверьте вручную![/yellow]")
+
 def pterodactyl_full_uninstall():
     clear_console()
-    console.print(Panel("[bold red]Мастер полного удаления Pterodactyl[/bold red]", title="Удаление Pterodactyl", border_style="red"))
-    inquirer.text(message="Нажмите Enter для старта...").execute()
-
-    # 1. Остановка и отключение systemd unit pteroq
+    console.print(Panel("[red]Удаление Pterodactyl...[/red]", title="Удаление Pterodactyl", border_style="red"))
+    # 1. Остановка и удаление pteroq
     console.print(Panel("Остановка и отключение systemd unit pteroq...", title="Шаг 1", border_style="yellow"))
     run_command_with_dpkg_fix('systemctl stop pteroq.service', spinner_message="Остановка pteroq.service...")
     run_command_with_dpkg_fix('systemctl disable pteroq.service', spinner_message="Отключение pteroq.service...")
     run_command_with_dpkg_fix('rm -f /etc/systemd/system/pteroq.service', spinner_message="Удаление systemd unit...")
     run_command_with_dpkg_fix('systemctl daemon-reload', spinner_message="Перезагрузка systemd...")
     console.print("[green]systemd unit pteroq удалён![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
-
     # 2. Удаление крон-задачи
-    console.print(Panel("Удалите крон-задачу вручную (если была добавлена):\n\n[cyan]crontab -e[/cyan]\nУдалите строку:\n[cyan]* * * * * php /var/www/pterodactyl/artisan schedule:run >> /dev/null 2>&1[/cyan]", title="Шаг 2: Крон", border_style="yellow"))
-    inquirer.text(message="Нажмите Enter, когда крон будет удалён...").execute()
-
+    console.print(Panel("Удаление крон-задачи...", title="Шаг 2: Крон", border_style="yellow"))
+    _remove_pterodactyl_cron()
     # 3. Удаление nginx-конфига
     console.print(Panel("Удаление nginx-конфига...", title="Шаг 3", border_style="yellow"))
     run_command_with_dpkg_fix('rm -f /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf', spinner_message="Удаление nginx-конфига...")
     run_command_with_dpkg_fix('systemctl restart nginx', spinner_message="Перезапуск nginx...")
     console.print("[green]nginx-конфиг удалён и nginx перезапущен![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
-
     # 4. Удаление файлов панели
     console.print(Panel("Удаление файлов панели...", title="Шаг 4", border_style="yellow"))
     run_command_with_dpkg_fix('rm -rf /var/www/pterodactyl', spinner_message="Удаление /var/www/pterodactyl...")
     console.print("[green]Файлы панели удалены![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
-
-    # 5. Инструкция по удалению БД и пользователя
-    console.print(Panel("[bold]Удалите базу данных и пользователя вручную![/bold]\n\nПример для MariaDB:\n\n[cyan]mariadb -u root -p[/cyan]\n\n[cyan]DROP DATABASE panel;\nDROP USER 'pterodactyl'@'127.0.0.1';\nFLUSH PRIVILEGES;\nexit[/cyan]", title="Шаг 5: База данных", border_style="yellow"))
-    inquirer.text(message="Нажмите Enter, когда БД и пользователь будут удалены...").execute()
-
-    # 6. Финальное напутствие
-    console.print(Panel("[bold green]Удаление Pterodactyl завершено![/bold green]", title="Готово!", border_style="green"))
+    # 5. Удаление базы данных
+    console.print(Panel("Удаление базы данных и пользователя...", title="Шаг 5: База данных", border_style="yellow"))
+    _remove_pterodactyl_db()
+    # Финальное подтверждение
     inquirer.text(message="Нажмите Enter для выхода...").execute()
 
 def pterodactyl_diagnose_and_install():
