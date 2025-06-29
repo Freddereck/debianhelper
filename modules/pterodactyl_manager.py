@@ -143,15 +143,24 @@ def pterodactyl_manage_menu():
                 "systemctl restart pteroq.service",
                 "systemctl stop pteroq.service",
                 "systemctl start pteroq.service",
-                "Назад"
             ]
+            if not _pteroq_unit_exists():
+                sys_choices.insert(0, "Создать systemd unit pteroq")
+            sys_choices.append("Назад")
             sys_cmd = inquirer.select(message="Выберите действие с pteroq:", choices=sys_choices).execute()
+            if sys_cmd == "Создать systemd unit pteroq":
+                _create_pteroq_unit()
+                inquirer.text(message="Нажмите Enter для возврата...").execute()
+                continue
             if sys_cmd != "Назад":
                 res = run_command_with_dpkg_fix(sys_cmd, spinner_message=f"{sys_cmd} ...")
                 if res and res.returncode == 0:
-                    console.print(Panel(res.stdout or "[green]Операция выполнена![/green]", title="systemd output", border_style="green"))
+                    console.print(Panel(res.stdout or "[green]Операция выполнена![green]", title="systemd output", border_style="green"))
                 else:
-                    console.print(Panel((res.stderr or res.stdout or "[red]Ошибка systemd[/red]"), title="systemd error", border_style="red"))
+                    if res and 'not found' in (res.stderr or ''):
+                        console.print(Panel("[red]systemd unit pteroq.service не найден![/red]\nВы можете создать его автоматически.", title="systemd error", border_style="red"))
+                    else:
+                        console.print(Panel((res.stderr or res.stdout or "[red]Ошибка systemd[red]"), title="systemd error", border_style="red"))
                 inquirer.text(message="Enter для возврата в меню...").execute()
         elif action == "Просмотр логов панели":
             res = run_command_with_dpkg_fix('journalctl -u nginx -n 50 --no-pager', spinner_message="Логи nginx...")
@@ -470,7 +479,16 @@ def pterodactyl_install_wizard():
     use_menu = inquirer.confirm(message="Хотите настроить параметры панели вручную (рекомендуется для production)?", default=False).execute()
     if use_menu:
         defaults['author'] = inquirer.text(message="Email для экспорта яиц (Egg Author Email):", default=defaults['author']).execute()
-        defaults['url'] = inquirer.text(message="URL панели (https://...):", default=defaults['url']).execute()
+        url_choices = [
+            f"Текущий: {defaults['url']}",
+            f"Использовать IP сервера ({get_default_ip()})",
+            "Ввести вручную..."
+        ]
+        url_choice = inquirer.select(message="URL панели:", choices=url_choices, default=url_choices[0]).execute()
+        if url_choice.startswith("Использовать IP сервера"):
+            defaults['url'] = f"https://{get_default_ip()}"
+        elif url_choice == "Ввести вручную...":
+            defaults['url'] = inquirer.text(message="Введите URL панели (https://...):", default=defaults['url']).execute()
         defaults['timezone'] = inquirer.text(message="Часовой пояс (например, UTC):", default=defaults['timezone']).execute()
         defaults['cache'] = inquirer.select(message="Кэш-драйвер:", choices=['redis','memcached','file'], default=defaults['cache']).execute()
         defaults['session'] = inquirer.select(message="Session-драйвер:", choices=['redis','memcached','database','file','cookie'], default=defaults['session']).execute()
@@ -512,7 +530,7 @@ def pterodactyl_install_wizard():
         f"--port={defaults['db_port']}",
         f"--database={defaults['db_name']}",
         f"--username={defaults['db_user']}",
-        f"--password={defaults['db_pass']}",
+        f"--password=\"{defaults['db_pass']}\"" if defaults['db_pass'] else '--password=""',
     ]
     mail_args = [
         f"--driver={defaults['mail_driver']}",
@@ -535,6 +553,8 @@ def pterodactyl_install_wizard():
             console.print(Panel(res.stdout or f"[green]{title} выполнено![green]", title=title, border_style="green"))
         else:
             console.print(Panel((res.stderr or res.stdout or f"[red]Ошибка {title}[red]"), title=f"Ошибка {title}", border_style="red"))
+            if title == 'Database Settings':
+                console.print(Panel("[yellow]Если процесс завис — проверьте соединение с MariaDB, параметры доступа и повторите установку.\nВозможно, требуется задать пароль пользователя БД или разрешить root-доступ по socket.[/yellow]", title="Database Settings завис", border_style="yellow"))
             inquirer.text(message=f"{title} требует ручного ввода. Нажмите Enter после завершения...").execute()
             break
 
@@ -888,3 +908,28 @@ def run_command_with_dpkg_fix(cmd, spinner_message=None, cwd=None):
         else:
             console.print(Panel((fix.stderr or fix.stdout or "Не удалось выполнить apt --fix-broken install"), title="[red]Ошибка apt --fix-broken install[/red]", border_style="red"))
     return res 
+
+def _pteroq_unit_exists():
+    return os.path.exists('/etc/systemd/system/pteroq.service')
+
+def _create_pteroq_unit():
+    pteroq_unit = '''[Unit]
+Description=Pterodactyl Queue Worker
+After=redis-server.service
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+ExecStart=/usr/bin/php /var/www/pterodactyl/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3
+StartLimitInterval=180
+StartLimitBurst=30
+RestartSec=5s
+[Install]
+WantedBy=multi-user.target
+'''
+    unit_path = '/etc/systemd/system/pteroq.service'
+    with open(unit_path, 'w') as f:
+        f.write(pteroq_unit)
+    subprocess.run(['systemctl', 'daemon-reload'])
+    subprocess.run(['systemctl', 'enable', '--now', 'pteroq.service'])
+    console.print('[green]systemd unit pteroq создан и запущен![/green]') 
