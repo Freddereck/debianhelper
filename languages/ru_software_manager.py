@@ -65,6 +65,7 @@ def get_strings():
         "pterodactyl_manage_menu": "Управление Pterodactyl Panel",
         "pterodactyl_open_panel": "Открыть веб-панель Pterodactyl",
         "pterodactyl_add_server": "Добавить игровой сервер (через веб-интерфейс)",
+        "pterodactyl_diagnose_and_install": "Диагностика и автоустановка Pterodactyl",
 
         # Java diagnostics
         "java_not_found": "Java не найдена в системе!",

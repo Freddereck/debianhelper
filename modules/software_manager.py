@@ -1029,7 +1029,7 @@ def pterodactyl_manage_menu():
                 get_string('service_restart'),
                 get_string('pterodactyl_open_panel'),
                 get_string('pterodactyl_add_server'),
-                'Диагностика и автоустановка Pterodactyl',
+                get_string('pterodactyl_diagnose_and_install'),
                 get_string('action_install'),  # fallback: старый способ
                 get_string('action_uninstall'),
                 get_string('action_back'),
@@ -1056,7 +1056,7 @@ def pterodactyl_manage_menu():
         elif choice == get_string('pterodactyl_add_server'):
             console.print("[yellow]Добавление сервера реализуется через веб-интерфейс панели Pterodactyl![/yellow]")
             inquirer.text(message=get_string('press_enter_to_continue')).execute()
-        elif choice == 'Диагностика и автоустановка Pterodactyl':
+        elif choice == get_string('pterodactyl_diagnose_and_install'):
             pterodactyl_diagnose_and_install()
         elif choice == get_string('action_install'):
             _handle_install('pterodactyl')

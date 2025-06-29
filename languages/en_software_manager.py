@@ -63,6 +63,7 @@ def get_strings():
         "pterodactyl_manage_menu": "Pterodactyl Panel Management",
         "pterodactyl_open_panel": "Open Pterodactyl Web Panel",
         "pterodactyl_add_server": "Add Game Server (via web interface)",
+        "pterodactyl_diagnose_and_install": "Diagnose and Auto-Install Pterodactyl",
 
         # Java diagnostics
         "java_not_found": "Java not found in the system!",
