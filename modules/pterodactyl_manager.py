@@ -1250,3 +1250,34 @@ def pterodactyl_full_uninstall():
     # 7. Сообщение
     console.print(Panel("[green]Pterodactyl и все связанные файлы, сертификаты и настройки удалены![/green]", title="Удаление завершено", border_style="green"))
     inquirer.text(message="Нажмите Enter для выхода...").execute()
+
+# --- Удаление базы данных и пользователя Pterodactyl ---
+def _remove_pterodactyl_db():
+    import pymysql
+    import re
+    env_path = '/var/www/pterodactyl/.env'
+    if not os.path.exists(env_path):
+        console.print('[yellow].env не найден, пропускаю удаление БД[/yellow]')
+        return
+    with open(env_path) as f:
+        env = f.read()
+    db_user = re.search(r'DB_USERNAME=(.*)', env)
+    db_pass = re.search(r'DB_PASSWORD=(.*)', env)
+    db_name = re.search(r'DB_DATABASE=(.*)', env)
+    if not (db_user and db_pass and db_name):
+        console.print('[yellow]Не удалось найти параметры БД в .env, пропускаю удаление БД[/yellow]')
+        return
+    db_user = db_user.group(1).strip()
+    db_pass = db_pass.group(1).strip()
+    db_name = db_name.group(1).strip()
+    try:
+        conn = pymysql.connect(host='127.0.0.1', user='root')
+        with conn.cursor() as cur:
+            cur.execute(f"DROP DATABASE IF EXISTS `{db_name}`;")
+            cur.execute(f"DROP USER IF EXISTS '{db_user}'@'127.0.0.1';")
+            cur.execute("FLUSH PRIVILEGES;")
+        conn.commit()
+        conn.close()
+        console.print(f"[green]База данных {db_name} и пользователь {db_user} удалены![/green]")
+    except Exception as e:
+        console.print(f"[yellow]Ошибка при удалении БД или пользователя: {e}[/yellow]")
