@@ -591,6 +591,7 @@ def pterodactyl_install_wizard():
         if test_result is True:
             break
         console.print(Panel(f"[red]Не удалось подключиться к MariaDB:[/red]\n{test_result}", title="Ошибка подключения к БД", border_style="red"))
+        console.print(Panel("Проверьте, что база данных и пользователь существуют, пароль указан верно, и доступ разрешён. Если пароль пустой — задайте его вручную или используйте сгенерированный!", title="Совет", border_style="yellow"))
         retry = inquirer.confirm(message="Ввести параметры БД вручную?", default=True).execute()
         if not retry:
             console.print("[yellow]Будет повторена попытка с текущими параметрами.[/yellow]")
@@ -600,9 +601,12 @@ def pterodactyl_install_wizard():
         defaults['db_port'] = inquirer.text(message="DB port:", default=defaults['db_port']).execute()
         defaults['db_name'] = inquirer.text(message="DB name:", default=defaults['db_name']).execute()
         defaults['db_user'] = inquirer.text(message="DB user:", default=defaults['db_user']).execute()
-        db_pass_input = inquirer.text(message=f"DB password (Enter для автозаполнения):", default="").execute()
+        db_pass_input = inquirer.text(message=f"DB password (Enter для автозаполнения):", default=defaults['db_pass']).execute()
         if not db_pass_input and defaults['db_pass']:
-            console.print(f"[yellow]Используется сгенерированный пароль для БД: {defaults['db_pass']}[/yellow]")
+            console.print(f"[yellow]Используется сгенерированный/текущий пароль для БД: {defaults['db_pass']}[/yellow]")
+        elif not db_pass_input:
+            console.print("[red]Пароль не может быть пустым![/red] Введите пароль для пользователя БД.")
+            continue
         else:
             defaults['db_pass'] = db_pass_input
     # После успешного теста — обновляем .env
@@ -770,7 +774,7 @@ WantedBy=multi-user.target
     url = f'https://{domain}'
     console.print(Panel(f"[bold green]Установка Pterodactyl завершена![/bold green]\n\nПанель доступна по адресу: [cyan]{url}[/cyan]\n\n[bold]ВАЖНО:[/bold] Для входа используйте только [bold]https[/bold]! Если используете self-signed сертификат — браузер покажет предупреждение, выберите 'Продолжить' или 'Advanced -> Proceed'.\n\nЕсли видите ошибку [red]CSRF token mismatch[/red]:\n- Проверьте, что APP_URL в .env совпадает с адресом в браузере и начинается с https://\n- Перезапустите nginx и php-fpm после изменения .env\n- Очистите cookies в браузере\n\n[bold]Документация:[/bold] https://pterodactyl.io/panel/1.11/getting_started.html\n\n[bold yellow]Рекомендуется сразу сменить пароль администратора и настроить рабочий SMTP для почты![/bold yellow]", title="Готово!", border_style="green"))
     if domain and (domain == get_default_ip() or re.match(r'^\d+\.\d+\.\d+\.\d+$', domain)):
-        console.print(Panel("[yellow]Вы используете self-signed SSL сертификат для IP. Браузер покажет предупреждение о безопасности — выберите 'Продолжить' или 'Advanced -> Proceed'. Для production используйте домен и Let's Encrypt![/yellow]", title="Self-signed SSL", border_style="yellow"))
+        console.print(Panel("[yellow]Вы используете self-signed SSL сертификат для IP. Браузер покажет предупреждение о безопасности — выберите 'Продолжить' или 'Advanced -> Proceed'. Для production используйте домен и Let's Encrypt!\n\n[bold]Проверьте, что nginx слушает порт 443 на этот IP, и APP_URL в .env совпадает с https://[IP]. Если видите 404 — проверьте конфиг nginx и настройки облачного прокси (Azure, Cloudflare и др.).[/bold]", title="Self-signed SSL", border_style="yellow"))
     inquirer.text(message="Нажмите Enter для выхода...").execute()
 
     # После установки файлов панели и .env:
