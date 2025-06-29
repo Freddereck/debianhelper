@@ -184,16 +184,8 @@ echo "---------------"
     },
     "pterodactyl": {
         "display_name": "Pterodactyl (панель для игровых серверов)",
-        "package_name": "pterodactyl-panel",
-        "service_name": "pterodactyl-panel",
         "version_cmd": "cd /var/www/pterodactyl && php artisan --version",
         "is_installed_check": lambda: os.path.exists('/var/www/pterodactyl'),
-        "uninstall_cmd": "rm -rf /var/www/pterodactyl /etc/systemd/system/pterodactyl* && systemctl daemon-reload",
-        "service_status_cmd": "systemctl status pterodactyl-panel",
-        "service_start_cmd": "systemctl start pterodactyl-panel",
-        "service_stop_cmd": "systemctl stop pterodactyl-panel",
-        "service_restart_cmd": "systemctl restart pterodactyl-panel",
-        "auto_install": True,  # Флаг для расширенной автоматизации
     },
     "wings": {
         "display_name": "Wings (Pterodactyl Node)",
@@ -777,10 +769,28 @@ def _show_3xui_menu():
 def _show_actions_menu(key):
     data = SUPPORTED_SOFTWARE[key]
     is_installed = _is_package_installed(key)
-    
-    # --- Добавим спец.меню для 3x-ui ---
-    if key == "3x-ui" and is_installed:
-        _show_3xui_menu()
+    # --- Спец. обработка для Pterodactyl ---
+    if key == 'pterodactyl':
+        while True:
+            clear_console()
+            status_markup = get_string("status_installed") if is_installed else get_string("status_not_installed")
+            status_text = strip_rich_markup(status_markup)
+            title = f"{data['display_name']} - [{status_text}]"
+            console.print(Panel(title, style="bold blue"))
+            choices = [
+                Choice("manage", name=get_string("action_manage_service")),
+                Choice(None, name=get_string("action_back")),
+            ]
+            action = inquirer.select(
+                message=get_string("actions_prompt", package=data['display_name']),
+                choices=choices,
+                vi_mode=True
+            ).execute()
+            if action is None or action == "action_back":
+                break
+            if action == "manage":
+                pterodactyl_manage_menu()
+                break
         return
     # --- стандартное меню для остальных ---
     while True:
@@ -790,7 +800,6 @@ def _show_actions_menu(key):
             status_text = strip_rich_markup(status_markup)
             title = f"{data['display_name']} - [{status_text}]"
             console.print(Panel(title, style="bold blue"))
-
             choices = []
             if is_installed:
                 if data.get("service_name"):
@@ -801,13 +810,11 @@ def _show_actions_menu(key):
             else:
                 choices.append(Choice("install", name=get_string("action_install")))
             choices.append(Choice(None, name=get_string("action_back")))
-
             action = inquirer.select(
                 message=get_string("actions_prompt", package=data['display_name']),
                 choices=choices,
                 vi_mode=True
             ).execute()
-
             if action is None:
                 break
             if action == "install":
