@@ -411,17 +411,110 @@ def pterodactyl_install_wizard():
         return
     console.print("[green]Ключ приложения сгенерирован![green]")
 
-    # 13. Автоматизация artisan environment setup
-    for cmd in [
-        'php artisan p:environment:setup',
-        'php artisan p:environment:database',
-        'php artisan p:environment:mail']:
-        res = run_command_with_dpkg_fix(f'cd /var/www/pterodactyl && {cmd}', spinner_message=cmd)
+    # 13. Автоматизация artisan environment setup с дефолтами и возможностью меню
+    def get_env_value(key, default=None):
+        if os.path.exists(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith(key + '='):
+                        return line.strip().split('=',1)[1]
+        return default
+    # Дефолты
+    defaults = {
+        'author': get_env_value('APP_SERVICE_AUTHOR', 'admin@' + domain),
+        'url': f'https://{domain}',
+        'timezone': get_env_value('APP_TIMEZONE', 'UTC'),
+        'cache': get_env_value('CACHE_DRIVER', 'redis'),
+        'session': get_env_value('SESSION_DRIVER', 'redis'),
+        'queue': get_env_value('QUEUE_CONNECTION', 'redis'),
+        'redis_host': get_env_value('REDIS_HOST', '127.0.0.1'),
+        'redis_port': get_env_value('REDIS_PORT', '6379'),
+        'redis_pass': get_env_value('REDIS_PASSWORD', ''),
+        'settings_ui': get_env_value('APP_ENVIRONMENT_ONLY', 'false'),
+        'telemetry': get_env_value('PTERODACTYL_TELEMETRY_ENABLED', 'true'),
+        'db_host': get_env_value('DB_HOST', '127.0.0.1'),
+        'db_port': get_env_value('DB_PORT', '3306'),
+        'db_name': get_env_value('DB_DATABASE', 'panel'),
+        'db_user': get_env_value('DB_USERNAME', 'pterodactyl'),
+        'db_pass': get_env_value('DB_PASSWORD', ''),
+        'mail_driver': get_env_value('MAIL_DRIVER', 'smtp'),
+        'mail_from': get_env_value('MAIL_FROM_ADDRESS', 'admin@' + domain),
+        'mail_name': get_env_value('MAIL_FROM_NAME', 'Pterodactyl'),
+        'mail_host': get_env_value('MAIL_HOST', 'localhost'),
+        'mail_port': get_env_value('MAIL_PORT', '25'),
+        'mail_user': get_env_value('MAIL_USERNAME', ''),
+        'mail_pass': get_env_value('MAIL_PASSWORD', ''),
+        'mail_encryption': get_env_value('MAIL_ENCRYPTION', ''),
+    }
+    use_menu = inquirer.confirm(message="Хотите настроить параметры панели вручную (рекомендуется для production)?", default=False).execute()
+    if use_menu:
+        defaults['author'] = inquirer.text(message="Email для экспорта яиц (Egg Author Email):", default=defaults['author']).execute()
+        defaults['url'] = inquirer.text(message="URL панели (https://...):", default=defaults['url']).execute()
+        defaults['timezone'] = inquirer.text(message="Часовой пояс (например, UTC):", default=defaults['timezone']).execute()
+        defaults['cache'] = inquirer.select(message="Кэш-драйвер:", choices=['redis','memcached','file'], default=defaults['cache']).execute()
+        defaults['session'] = inquirer.select(message="Session-драйвер:", choices=['redis','memcached','database','file','cookie'], default=defaults['session']).execute()
+        defaults['queue'] = inquirer.select(message="Queue-драйвер:", choices=['redis','database','sync'], default=defaults['queue']).execute()
+        defaults['redis_host'] = inquirer.text(message="Redis host:", default=defaults['redis_host']).execute()
+        defaults['redis_port'] = inquirer.text(message="Redis port:", default=defaults['redis_port']).execute()
+        defaults['redis_pass'] = inquirer.text(message="Redis password (оставьте пустым если нет):", default=defaults['redis_pass']).execute()
+        defaults['settings_ui'] = inquirer.confirm(message="Включить UI-редактор настроек?", default=defaults['settings_ui']=='false').execute()
+        defaults['telemetry'] = inquirer.confirm(message="Включить отправку анонимной телеметрии?", default=defaults['telemetry']=='true').execute()
+        defaults['db_host'] = inquirer.text(message="DB host:", default=defaults['db_host']).execute()
+        defaults['db_port'] = inquirer.text(message="DB port:", default=defaults['db_port']).execute()
+        defaults['db_name'] = inquirer.text(message="DB name:", default=defaults['db_name']).execute()
+        defaults['db_user'] = inquirer.text(message="DB user:", default=defaults['db_user']).execute()
+        defaults['db_pass'] = inquirer.text(message="DB password:", default=defaults['db_pass']).execute()
+        defaults['mail_driver'] = inquirer.select(message="Mail driver:", choices=['smtp','sendmail','mailgun','mandrill','postmark'], default=defaults['mail_driver']).execute()
+        defaults['mail_from'] = inquirer.text(message="Email отправителя (MAIL_FROM_ADDRESS):", default=defaults['mail_from']).execute()
+        defaults['mail_name'] = inquirer.text(message="Имя отправителя (MAIL_FROM_NAME):", default=defaults['mail_name']).execute()
+        defaults['mail_host'] = inquirer.text(message="SMTP host:", default=defaults['mail_host']).execute()
+        defaults['mail_port'] = inquirer.text(message="SMTP port:", default=defaults['mail_port']).execute()
+        defaults['mail_user'] = inquirer.text(message="SMTP user:", default=defaults['mail_user']).execute()
+        defaults['mail_pass'] = inquirer.text(message="SMTP password:", default=defaults['mail_pass']).execute()
+        defaults['mail_encryption'] = inquirer.select(message="SMTP encryption:", choices=['tls','ssl',''], default=defaults['mail_encryption']).execute()
+    # Формируем параметры для artisan
+    setup_args = [
+        f"--author={defaults['author']}",
+        f"--url={defaults['url']}",
+        f"--timezone={defaults['timezone']}",
+        f"--cache={defaults['cache']}",
+        f"--session={defaults['session']}",
+        f"--queue={defaults['queue']}",
+        f"--redis-host={defaults['redis_host']}",
+        f"--redis-port={defaults['redis_port']}",
+        f"--redis-pass={defaults['redis_pass']}",
+        f"--settings-ui={'true' if defaults['settings_ui'] in (True,'true') else 'false'}",
+        f"--telemetry={'true' if defaults['telemetry'] in (True,'true') else 'false'}",
+    ]
+    db_args = [
+        f"--host={defaults['db_host']}",
+        f"--port={defaults['db_port']}",
+        f"--database={defaults['db_name']}",
+        f"--username={defaults['db_user']}",
+        f"--password={defaults['db_pass']}",
+    ]
+    mail_args = [
+        f"--driver={defaults['mail_driver']}",
+        f"--email={defaults['mail_from']}",
+        f"--from={defaults['mail_name']}",
+        f"--host={defaults['mail_host']}",
+        f"--port={defaults['mail_port']}",
+        f"--username={defaults['mail_user']}",
+        f"--password={defaults['mail_pass']}",
+        f"--encryption={defaults['mail_encryption']}",
+    ]
+    # Запуск команд
+    for cmd, args, title in [
+        ('php artisan p:environment:setup', setup_args, 'App Settings'),
+        ('php artisan p:environment:database', db_args, 'Database Settings'),
+        ('php artisan p:environment:mail', mail_args, 'Mail Settings'),
+    ]:
+        res = run_command_with_dpkg_fix(f"cd /var/www/pterodactyl && {cmd} {' '.join(args)}", spinner_message=title)
         if res and res.returncode == 0:
-            console.print(Panel(res.stdout or f"[green]{cmd} выполнено![green]", title=cmd, border_style="green"))
+            console.print(Panel(res.stdout or f"[green]{title} выполнено![green]", title=title, border_style="green"))
         else:
-            console.print(Panel((res.stderr or res.stdout or f"[red]Ошибка {cmd}[red]"), title=f"Ошибка {cmd}", border_style="red"))
-            inquirer.text(message=f"{cmd} требует ручного ввода. Нажмите Enter после завершения...").execute()
+            console.print(Panel((res.stderr or res.stdout or f"[red]Ошибка {title}[red]"), title=f"Ошибка {title}", border_style="red"))
+            inquirer.text(message=f"{title} требует ручного ввода. Нажмите Enter после завершения...").execute()
             break
 
     # 14. Миграция и seed базы
