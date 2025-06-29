@@ -429,4 +429,14 @@ def run_command_with_dpkg_fix(cmd, spinner_message=None, cwd=None):
             res = run_command(cmd, spinner_message=spinner_message, cwd=cwd)
         else:
             console.print(Panel((fix.stderr or fix.stdout or "Не удалось выполнить dpkg --configure -a"), title="[red]Ошибка dpkg --configure -a[/red]", border_style="red"))
+    # Проверка на Unmet dependencies
+    err_out = (res.stderr or '') + '\n' + (res.stdout or '') if res else ''
+    if "Unmet dependencies" in err_out and "apt --fix-broken install" in err_out:
+        console.print(Panel("[yellow]Обнаружены битые зависимости![/yellow]\n[cyan]Выполняется автоматическое восстановление: apt --fix-broken install -y[/cyan]", title="apt fix-broken auto-fix", border_style="yellow"))
+        fix = run_command('apt --fix-broken install -y', spinner_message="apt --fix-broken install ...", cwd=cwd)
+        if fix and fix.returncode == 0:
+            console.print("[green]apt --fix-broken install выполнено успешно! Повтор команды...[/green]")
+            res = run_command(cmd, spinner_message=spinner_message, cwd=cwd)
+        else:
+            console.print(Panel((fix.stderr or fix.stdout or "Не удалось выполнить apt --fix-broken install"), title="[red]Ошибка apt --fix-broken install[/red]", border_style="red"))
     return res 
