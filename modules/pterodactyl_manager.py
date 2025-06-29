@@ -95,13 +95,52 @@ def pterodactyl_install_wizard():
     inquirer.text(message="Enter для продолжения...").execute()
 
     # 7. Установка зависимостей
-    console.print(Panel("Установка зависимостей: php8.3, mariadb, nginx, tar, unzip, git, redis-server...", title="Шаг 6", border_style="yellow"))
-    res = run_command('apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip} mariadb-server nginx tar unzip git redis-server', spinner_message="Установка зависимостей...")
-    if res and res.returncode != 0:
-        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка установки зависимостей[/red]", border_style="red"))
-        inquirer.text(message="Нажмите Enter для выхода...").execute()
-        return
-    console.print("[green]Зависимости установлены![/green]")
+    dependencies_list = [
+        "php8.3", "php8.3-common", "php8.3-cli", "php8.3-gd", "php8.3-mysql", "php8.3-mbstring", "php8.3-bcmath", "php8.3-xml", "php8.3-fpm", "php8.3-curl", "php8.3-zip",
+        "mariadb-server", "nginx", "tar", "unzip", "git", "redis-server"
+    ]
+    console.print(Panel(
+        "[bold yellow]Установка зависимостей (примерно 2-5 минут, зависит от скорости сети и системы)...[/bold yellow]\n"
+        "Пакеты: [cyan]" + ", ".join(dependencies_list) + "[/cyan]",
+        title="Шаг 6: Установка зависимостей", border_style="yellow"))
+    installed = []
+    already = []
+    failed = []
+    for pkg in dependencies_list:
+        console.print(f"[cyan]Устанавливается: {pkg} ...[/cyan]")
+        # Проверка, установлен ли уже
+        check = run_command(f"dpkg -s {pkg}", spinner_message=f"Проверка {pkg}...")
+        if check and check.returncode == 0:
+            console.print(f"[yellow]{pkg} уже установлен.[/yellow]")
+            already.append(pkg)
+            continue
+        res = run_command(f"apt install -y {pkg}", spinner_message=f"Установка {pkg}...")
+        if res and res.returncode == 0:
+            console.print(f"[green]{pkg} успешно установлен![/green]")
+            installed.append(pkg)
+        else:
+            console.print(f"[red]Ошибка при установке {pkg}![/red]")
+            if res:
+                if res.stderr:
+                    console.print(Panel(res.stderr, title=f"[red]apt-get stderr для {pkg}[/red]", border_style="red"))
+                if res.stdout:
+                    console.print(Panel(res.stdout, title=f"[yellow]apt-get stdout для {pkg}[/yellow]", border_style="yellow"))
+            console.print("[bold]Возможные причины:[/bold] Нет интернета, проблемы с репозиториями, конфликт пакетов, недостаточно места, dpkg/apt заблокирован.")
+            failed.append(pkg)
+        inquirer.text(message="Enter для продолжения...").execute()
+    # Итоговая сводка
+    summary = ""
+    if installed:
+        summary += "[green]Установлены:[/green] " + ", ".join(installed) + "\n"
+    if already:
+        summary += "[yellow]Уже были:[/yellow] " + ", ".join(already) + "\n"
+    if failed:
+        summary += "[red]Не удалось установить:[/red] " + ", ".join(failed) + "\n"
+    if not failed:
+        summary += "[bold green]Все зависимости установлены![/bold green]"
+    else:
+        summary += "[bold red]Есть ошибки! Проверьте вывод выше и устраните проблемы вручную.[/bold red]"
+    console.print(Panel(summary, title="Итог установки зависимостей", border_style="green" if not failed else "red"))
     inquirer.text(message="Enter для продолжения...").execute()
 
     # 8. Установка Composer
