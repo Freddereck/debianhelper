@@ -65,7 +65,7 @@ def pterodactyl_install_wizard():
 
     # 4. Добавление репозитория Redis
     console.print(Panel("Добавление репозитория Redis...", title="Шаг 3", border_style="yellow"))
-    res = run_command('curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg', spinner_message="Импорт GPG ключа Redis...")
+    res = run_command('curl -fsSL https://packages.redis.io/gpg | gpg --yes --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg', spinner_message="Импорт GPG ключа Redis...")
     res2 = run_command('echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list', spinner_message="Добавление репозитория Redis...")
     if (res and res.returncode != 0) or (res2 and res2.returncode != 0):
         console.print(Panel((res.stderr or '') + '\n' + (res2.stderr or ''), title="[red]Ошибка добавления репозитория Redis[/red]", border_style="red"))
