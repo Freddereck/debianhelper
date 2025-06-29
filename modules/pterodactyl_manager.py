@@ -412,13 +412,27 @@ def pterodactyl_install_wizard():
     console.print("[green]Ключ приложения сгенерирован![green]")
 
     # 13. Автоматизация artisan environment setup с дефолтами и возможностью меню
-    def get_env_value(key, default=None):
-        if os.path.exists(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    if line.startswith(key + '='):
-                        return line.strip().split('=',1)[1]
-        return default
+    # Определяем domain ДО defaults
+    def get_default_ip():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = '127.0.0.1'
+        finally:
+            s.close()
+        return ip
+    env_path = '/var/www/pterodactyl/.env'
+    domain = None
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith('APP_URL='):
+                    domain = line.strip().split('=',1)[1].replace('https://','').replace('http://','').split(':')[0]
+                    break
+    if not domain or domain in ("localhost", "127.0.0.1"):
+        domain = get_default_ip()
     # Дефолты
     defaults = {
         'author': get_env_value('APP_SERVICE_AUTHOR', 'admin@' + domain),
