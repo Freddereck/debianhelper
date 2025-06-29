@@ -188,7 +188,7 @@ echo "---------------"
         "service_name": "pterodactyl-panel",
         "version_cmd": "cd /var/www/pterodactyl && php artisan --version",
         "is_installed_check": lambda: os.path.exists('/var/www/pterodactyl'),
-        "install_cmd": "echo 'Pterodactyl будет установлен по официальной инструкции. Требуется: nginx, MySQL/MariaDB, PHP 8.1+, composer, nodejs, yarn.\nСм. https://pterodactyl.io/panel/1.11/getting_started.html' && sleep 2 && bash <(curl -s https://raw.githubusercontent.com/pterodactyl/installer/main/install.sh)",
+        "install_cmd": "echo 'Pterodactyl будет установлен по официальной инструкции. Требуется: nginx, MySQL/MariaDB, PHP 8.1+, composer, nodejs, yarn.\nСм. https://pterodactyl.io/panel/1.11/getting_started.html#installing-composer",
         "uninstall_cmd": "rm -rf /var/www/pterodactyl /etc/systemd/system/pterodactyl* && systemctl daemon-reload",
         "service_status_cmd": "systemctl status pterodactyl-panel",
         "service_start_cmd": "systemctl start pterodactyl-panel",
@@ -1059,9 +1059,9 @@ def pterodactyl_manage_menu():
         elif choice == get_string('pterodactyl_diagnose_and_install'):
             pterodactyl_diagnose_and_install()
         elif choice == get_string('action_install'):
-            _handle_install('pterodactyl')
+            pterodactyl_install_wizard()
         elif choice == get_string('action_uninstall'):
-            _handle_uninstall('pterodactyl')
+            pterodactyl_full_uninstall()
         elif choice == get_string('action_back'):
             break
 
@@ -1302,3 +1302,96 @@ def pterodactyl_diagnose_and_install():
         pterodactyl_auto_install(mode='auto')
     else:
         log("Установка отменена пользователем", False) 
+
+def pterodactyl_install_wizard():
+    from rich.panel import Panel
+    import subprocess, shutil, os
+    import time
+    console.print(Panel("[bold cyan]Пошаговая установка Pterodactyl по официальной документации[/bold cyan]", title="Pterodactyl Install Wizard", border_style="cyan"))
+    # 1. Установка зависимостей
+    steps = [
+        ("Установка базовых зависимостей", "apt -y install software-properties-common curl apt-transport-https ca-certificates gnupg"),
+        ("Добавление репозитория PHP (Ubuntu)", "LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php"),
+        ("Добавление репозитория Redis", "curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg && echo 'deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main' | sudo tee /etc/apt/sources.list.d/redis.list"),
+        ("Обновление списка пакетов", "apt update"),
+        ("Установка PHP, MariaDB, nginx, Redis и других зависимостей", "apt -y install php8.3 php8.3-common php8.3-cli php8.3-gd php8.3-mysql php8.3-mbstring php8.3-bcmath php8.3-xml php8.3-fpm php8.3-curl php8.3-zip mariadb-server nginx tar unzip git redis-server"),
+        ("Установка Composer", "curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer"),
+    ]
+    for msg, cmd in steps:
+        res = run_command(cmd, spinner_message=msg)
+        if res and res.returncode == 0:
+            console.print(f"[green]✔ {msg}[/green]")
+        else:
+            console.print(Panel(res.stderr or res.stdout or '[red]Неизвестная ошибка[/red]', title=f"[red]Ошибка: {msg}[/red]", border_style="red"))
+            if not inquirer.confirm(message="Продолжить установку? (рекомендуется устранить ошибку)", default=False).execute():
+                return
+    # 2. Скачивание и распаковка панели
+    panel_dir = "/var/www/pterodactyl"
+    cmds = [
+        (f"Создание директории {panel_dir}", f"mkdir -p {panel_dir}"),
+        (f"Переход в {panel_dir}", f"cd {panel_dir}"),
+        ("Скачивание архива панели", f"curl -Lo {panel_dir}/panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz"),
+        ("Распаковка архива", f"tar -xzvf {panel_dir}/panel.tar.gz -C {panel_dir}"),
+        ("Права на storage и cache", f"chmod -R 755 {panel_dir}/storage/* {panel_dir}/bootstrap/cache/")
+    ]
+    for msg, cmd in cmds:
+        res = run_command(cmd, spinner_message=msg)
+        if res and res.returncode == 0:
+            console.print(f"[green]✔ {msg}[/green]")
+        else:
+            console.print(Panel(res.stderr or res.stdout or '[red]Неизвестная ошибка[/red]', title=f"[red]Ошибка: {msg}[/red]", border_style="red"))
+            if not inquirer.confirm(message="Продолжить установку? (рекомендуется устранить ошибку)", default=False).execute():
+                return
+    # 3. Копирование .env, composer install, artisan key:generate
+    cmds2 = [
+        ("Копирование .env.example", f"cp {panel_dir}/.env.example {panel_dir}/.env"),
+        ("Установка PHP зависимостей (composer)", f"cd {panel_dir} && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader"),
+        ("Генерация APP_KEY", f"cd {panel_dir} && php artisan key:generate --force")
+    ]
+    for msg, cmd in cmds2:
+        res = run_command(cmd, spinner_message=msg)
+        if res and res.returncode == 0:
+            console.print(f"[green]✔ {msg}[/green]")
+        else:
+            console.print(Panel(res.stderr or res.stdout or '[red]Неизвестная ошибка[/red]', title=f"[red]Ошибка: {msg}[/red]", border_style="red"))
+            if not inquirer.confirm(message="Продолжить установку? (рекомендуется устранить ошибку)", default=False).execute():
+                return
+    # 4. Инструкция по настройке MariaDB
+    console.print(Panel("[yellow]Далее необходимо вручную создать базу данных и пользователя для Pterodactyl.\n\nПример команд для MariaDB/MySQL:\n\n[bold]mariadb -u root -p[/bold]\nCREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY 'yourPassword';\nCREATE DATABASE panel;\nGRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;\nexit\n\nПодробнее: https://pterodactyl.io/panel/1.11/getting_started.html#database-configuration[/yellow]", title="MariaDB/MySQL", border_style="yellow"))
+    inquirer.text(message="Нажмите Enter после создания БД...").execute()
+    # 5. Инструкция по artisan setup
+    console.print(Panel("[yellow]Теперь настройте окружение и выполните миграции:\n\n[bold]cd /var/www/pterodactyl\nphp artisan p:environment:setup\nphp artisan p:environment:database\nphp artisan p:environment:mail\nphp artisan migrate --seed --force\nphp artisan p:user:make[/bold]\n\nПодробнее: https://pterodactyl.io/panel/1.11/getting_started.html#installation[/yellow]", title="Настройка окружения", border_style="yellow"))
+    inquirer.text(message="Нажмите Enter после выполнения этих команд...").execute()
+    # 6. Права на файлы
+    res = run_command(f"chown -R www-data:www-data {panel_dir}/*", spinner_message="Установка прав на файлы панели")
+    if res and res.returncode == 0:
+        console.print(f"[green]✔ Права на файлы установлены[/green]")
+    else:
+        console.print(Panel(res.stderr or res.stdout or '[red]Неизвестная ошибка[/red]', title=f"[red]Ошибка установки прав[/red]", border_style="red"))
+    # 7. Инструкция по крону и systemd
+    console.print(Panel("[yellow]Добавьте в crontab (sudo crontab -e):\n[bold]* * * * * php /var/www/pterodactyl/artisan schedule:run >> /dev/null 2>&1[/bold]\n\nСоздайте systemd unit для pteroq.service (см. документацию):\nhttps://pterodactyl.io/panel/1.11/getting_started.html#queue-listeners[/yellow]", title="Крон и systemd", border_style="yellow"))
+    inquirer.text(message="Нажмите Enter для завершения установки...").execute()
+    console.print(Panel("[green]Установка Pterodactyl завершена! Откройте панель в браузере: http://<ip>/\n\nДокументация: https://pterodactyl.io/panel/1.11/getting_started.html[/green]", title="Готово!", border_style="green"))
+
+# --- Удаление Pterodactyl ---
+def pterodactyl_full_uninstall():
+    from rich.panel import Panel
+    import subprocess, shutil, os
+    panel_dir = "/var/www/pterodactyl"
+    # Остановка сервисов
+    run_command("systemctl stop pterodactyl-panel", spinner_message="Остановка pterodactyl-panel")
+    run_command("systemctl stop pteroq", spinner_message="Остановка pteroq")
+    # Удаление systemd unit
+    run_command("systemctl disable pterodactyl-panel", spinner_message="Отключение автозапуска pterodactyl-panel")
+    run_command("systemctl disable pteroq", spinner_message="Отключение автозапуска pteroq")
+    run_command("rm -f /etc/systemd/system/pterodactyl-panel.service /etc/systemd/system/pteroq.service", spinner_message="Удаление systemd unit файлов")
+    run_command("systemctl daemon-reload", spinner_message="Перезагрузка systemd")
+    # Удаление панели
+    run_command(f"rm -rf {panel_dir}", spinner_message="Удаление файлов панели")
+    # Удаление nginx-конфига
+    run_command("rm -f /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf", spinner_message="Удаление nginx-конфига панели")
+    run_command("systemctl restart nginx", spinner_message="Перезапуск nginx")
+    # Инструкция по удалению базы данных
+    console.print(Panel("[yellow]Для полного удаления удалите базу данных и пользователя в MariaDB/MySQL вручную:\n\n[bold]mariadb -u root -p\nDROP DATABASE panel;\nDROP USER 'pterodactyl'@'127.0.0.1';\nexit[/bold]\n\nПодробнее: https://pterodactyl.io/panel/1.11/getting_started.html#database-configuration[/yellow]", title="Удаление БД", border_style="yellow"))
+    inquirer.text(message="Нажмите Enter для завершения удаления...").execute()
+    console.print(Panel("[green]Удаление Pterodactyl завершено![/green]", title="Готово!", border_style="green"))
