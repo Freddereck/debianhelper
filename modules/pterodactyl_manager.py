@@ -93,7 +93,8 @@ def _get_pterodactyl_info():
         with open(db_path, 'w') as f:
             for line in lines:
                 if line.startswith('APP_URL='):
-                    f.write(f'APP_URL=https://{domain}\n')
+                    clean_domain = domain.replace('"', '').replace("'", '')
+                    f.write(f'APP_URL=https://{clean_domain}\n')
                 else:
                     f.write(line)
         console.print(Panel(f"[green]APP_URL в .env автоматически исправлен на https://{domain}!\nПерезапускаю nginx и php-fpm...[/green]", title="APP_URL исправлен", border_style="green"))
@@ -767,246 +768,48 @@ def pterodactyl_install_wizard():
         admin_email = inquirer.text(message="Введите валидный email для администратора:", default=admin_email).execute()
     while not is_valid_username(admin_name):
         admin_name = inquirer.text(message="Введите username (латиница, цифры, -, _, .):", default=admin_name).execute()
-    user_cmd = (
-        f"cd /var/www/pterodactyl && php artisan p:user:make "
-        f"--email={admin_email} --username={admin_name} --name-first={admin_name} "
-        f"--name-last={admin_name} --password={admin_pass} --admin=1"
-    )
-    res = run_command_with_dpkg_fix(user_cmd, spinner_message="Создание администратора панели...")
-    if res and res.returncode == 0 and ('User Created' in (res.stdout or '') or 'UUID' in (res.stdout or '')):
-        console.print(Panel(f"[green]Администратор создан автоматически![/green]\n\n[cyan]Email:[/cyan] {admin_email}\n[cyan]Имя:[/cyan] {admin_name}\n[cyan]Пароль:[/cyan] {admin_pass}", title="Админ создан", border_style="green"))
-    else:
-        console.print(Panel(f"[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make --email={admin_email} --username={admin_name} --name-first={admin_name} --name-last={admin_name} --password={admin_pass} --admin=1[cyan]", title="Ручное создание админа", border_style="yellow"))
-        inquirer.text(message="Нажмите Enter, когда пользователь будет создан...").execute()
+    while True:
+        user_cmd = (
+            f"cd /var/www/pterodactyl && php artisan p:user:make "
+            f"--email={admin_email} --username={admin_name} --name-first={admin_name} "
+            f"--name-last={admin_name} --password={admin_pass} --admin=1"
+        )
+        res = run_command_with_dpkg_fix(user_cmd, spinner_message="Создание администратора панели...")
+        if res and res.returncode == 0 and ('User Created' in (res.stdout or '') or 'UUID' in (res.stdout or '')):
+            console.print(Panel(f"[green]Администратор создан автоматически![/green]\n\n[cyan]Email:[/cyan] {admin_email}\n[cyan]Имя:[/cyan] {admin_name}\n[cyan]Пароль:[/cyan] {admin_pass}", title="Админ создан", border_style="green"))
+            break
+        err = (res.stderr or res.stdout or "")
+        if 'already been taken' in err:
+            console.print(Panel(f"[yellow]Пользователь с email {admin_email} или username {admin_name} уже существует![/yellow]", title="Админ уже есть", border_style="yellow"))
+            action = inquirer.select(message="Что сделать?", choices=["Ввести другой email/username", "Сбросить пароль для существующего пользователя", "Пропустить"], default="Ввести другой email/username").execute()
+            if action == "Ввести другой email/username":
+                admin_email = inquirer.text(message="Введите уникальный email:", default=admin_email).execute()
+                admin_name = inquirer.text(message="Введите уникальный username:", default=admin_name).execute()
+                continue
+            elif action == "Сбросить пароль для существующего пользователя":
+                reset_email = inquirer.text(message="Email пользователя для сброса пароля:", default=admin_email).execute()
+                new_pass = inquirer.text(message="Новый пароль:", default=admin_pass).execute()
+                reset_cmd = f"cd /var/www/pterodactyl && php artisan p:user:password {reset_email} --password={new_pass}"
+                res2 = run_command_with_dpkg_fix(reset_cmd, spinner_message="Сброс пароля администратора...")
+                if res2 and res2.returncode == 0:
+                    console.print(Panel(f"[green]Пароль для {reset_email} успешно сброшен! Новый пароль: {new_pass}", title="Пароль сброшен", border_style="green"))
+                else:
+                    console.print(Panel((res2.stderr or res2.stdout or "[red]Ошибка сброса пароля[/red]"), title="Ошибка сброса пароля", border_style="red"))
+                break
+            else:
+                break
+        else:
+            console.print(Panel(f"[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make --email={admin_email} --username={admin_name} --name-first={admin_name} --name-last={admin_name} --password={admin_pass} --admin=1[cyan]", title="Ручное создание админа", border_style="yellow"))
+            inquirer.text(message="Нажмите Enter, когда пользователь будет создан...").execute()
+            break
 
     # 16. Права на папку
     console.print(Panel("Установка прав на папку для www-data...", title="Шаг 15", border_style="yellow"))
-    res = run_command_with_dpkg_fix('chown -R www-data:www-data /var/www/pterodactyl/*', spinner_message="chown www-data...")
-    if res and res.returncode != 0:
-        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка chown[red]", border_style="red"))
-        inquirer.text(message="Нажмите Enter для выхода...").execute()
-        return
-    console.print("[green]Права на папку установлены![green]")
-
-    # 17. Инструкция по nginx (до этого шага должен быть определён domain)
-    # domain определяем заранее
-    def get_default_ip():
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(('8.8.8.8', 80))
-            ip = s.getsockname()[0]
-        except Exception:
-            ip = '127.0.0.1'
-        finally:
-            s.close()
-        return ip
-    # Определяем домен или IP
-    env_path = '/var/www/pterodactyl/.env'
-    domain = None
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                if line.startswith('APP_URL='):
-                    domain = line.strip().split('=',1)[1].replace('https://','').replace('http://','').split(':')[0]
-                    break
-    if not domain or domain in ("localhost", "127.0.0.1"):
-        domain = get_default_ip()
-    # Предложить сменить/установить домен
-    change_domain = inquirer.confirm(message=f"Текущий домен/IP панели: {domain}. Хотите изменить/установить свой домен?", default=False).execute()
-    if change_domain:
-        domain = inquirer.text(message="Введите домен для панели (например, panel.example.com):", default=domain).execute()
-        domain = domain.replace('"', '').replace("'", "")
-        # Сохраняем в .env
-        if os.path.exists(env_path):
-            lines = []
-            with open(env_path) as f:
-                for line in f:
-                    if line.startswith('APP_URL='):
-                        lines.append(f'APP_URL=https://{domain}\n')
-                    else:
-                        lines.append(line)
-            with open(env_path, 'w') as f:
-                f.writelines(lines)
-    _ensure_nginx_pterodactyl(domain)
-    # --- Автоматическая установка Let's Encrypt SSL для домена ---
-    if domain and not (domain == get_default_ip() or re.match(r'^\d+\.\d+\.\d+\.\d+$', domain)):
-        admin_email = defaults.get('author', f'admin@{domain}')
-        console.print(Panel(f"[bold]Попытка автоматической установки SSL-сертификата Let's Encrypt для домена {domain}...[/bold]\n\nEmail для регистрации: {admin_email}", title="SSL для домена", border_style="yellow"))
-        import shutil
-        import subprocess
-        # Проверка наличия certbot-nginx
-        def has_certbot_nginx():
-            try:
-                out = subprocess.check_output(['certbot', 'plugins'], encoding='utf-8')
-                return 'nginx' in out
-            except Exception:
-                return False
-        if not has_certbot_nginx():
-            console.print("[yellow]Устанавливается плагин certbot-nginx...[/yellow]")
-            run_command_with_dpkg_fix("apt-get update && apt-get install -y python3-certbot-nginx || apt-get install -y certbot-nginx", spinner_message="Установка certbot-nginx")
-        # Теперь certbot-nginx точно есть
-        certbot_cmd = f"certbot --nginx --non-interactive --agree-tos -m {admin_email} -d {domain} --redirect"
-        res = run_command_with_dpkg_fix(certbot_cmd, spinner_message="Получение SSL-сертификата Let's Encrypt")
-        if res and res.returncode == 0:
-            console.print(Panel(f"[green]SSL-сертификат успешно установлен![/green]\nПанель будет доступна по адресу: https://{domain}", title="Let's Encrypt SSL", border_style="green"))
-            run_command_with_dpkg_fix("systemctl restart nginx", spinner_message="Перезапуск nginx")
-        else:
-            console.print(Panel(f"[red]Не удалось получить SSL-сертификат для {domain}![/red]\n\nПроверьте DNS, порт 80, nginx-конфиг и повторите попытку вручную:\n[bold]sudo certbot --nginx -d {domain} --non-interactive --agree-tos -m {admin_email} --redirect[/bold]", title="Ошибка Let's Encrypt", border_style="red"))
-
-    # 18. Автоматизация крон и systemd unit для очереди
-    # Крон
-    import subprocess
-    cron_line = '* * * * * php /var/www/pterodactyl/artisan schedule:run >> /dev/null 2>&1'
     try:
-        res = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
-        lines = res.stdout.splitlines() if res.returncode == 0 else []
-        if cron_line not in lines:
-            lines.append(cron_line)
-            new_cron = '\n'.join(lines) + '\n'
-            subprocess.run(['crontab', '-'], input=new_cron, text=True)
-            console.print('[green]Крон-задача добавлена![/green]')
-        else:
-            console.print('[yellow]Крон-задача уже была добавлена.[/yellow]')
+        run_command_with_dpkg_fix('chown -R www-data:www-data /var/www/pterodactyl', spinner_message="Установка прав на папку...")
+        console.print("[green]Права на папку установлены![/green]")
     except Exception as e:
-        console.print(f'[red]Ошибка при добавлении крон-задачи: {e}[/red]')
-    # Systemd unit
-    pteroq_unit = '''[Unit]
-Description=Pterodactyl Queue Worker
-After=redis-server.service
-[Service]
-User=www-data
-Group=www-data
-Restart=always
-ExecStart=/usr/bin/php /var/www/pterodactyl/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3
-StartLimitInterval=180
-StartLimitBurst=30
-RestartSec=5s
-[Install]
-WantedBy=multi-user.target
-'''
-    unit_path = '/etc/systemd/system/pteroq.service'
-    try:
-        with open(unit_path, 'w') as f:
-            f.write(pteroq_unit)
-        subprocess.run(['systemctl', 'daemon-reload'])
-        subprocess.run(['systemctl', 'enable', '--now', 'pteroq.service'])
-        console.print('[green]systemd unit pteroq создан и запущен![/green]')
-    except Exception as e:
-        console.print(f'[red]Ошибка при создании systemd unit: {e}[/red]')
-
-    # 19. Финальное напутствие
-    url = f'https://{domain}'
-    console.print(Panel(f"[bold green]Установка Pterodactyl завершена![/bold green]\n\nПанель доступна по адресу: [cyan]{url}[/cyan]\n\n[bold]ВАЖНО:[/bold] Для входа используйте только [bold]https[/bold]! Если используете self-signed сертификат — браузер покажет предупреждение, выберите 'Продолжить' или 'Advanced -> Proceed'.\n\nЕсли видите ошибку [red]CSRF token mismatch[/red]:\n- Проверьте, что APP_URL в .env совпадает с адресом в браузере и начинается с https://\n- Перезапустите nginx и php-fpm после изменения .env\n- Очистите cookies в браузере\n\n[bold]Документация:[/bold] https://pterodactyl.io/panel/1.11/getting_started.html\n\n[bold yellow]Рекомендуется сразу сменить пароль администратора и настроить рабочий SMTP для почты![/bold yellow]", title="Готово!", border_style="green"))
-    if domain and (domain == get_default_ip() or re.match(r'^\d+\.\d+\.\d+\.\d+$', domain)):
-        console.print(Panel("[yellow]Вы используете self-signed SSL сертификат для IP. Браузер покажет предупреждение о безопасности — выберите 'Продолжить' или 'Advanced -> Proceed'. Для production используйте домен и Let's Encrypt!\n\n[bold]Проверьте, что nginx слушает порт 443 на этот IP, и APP_URL в .env совпадает с https://[IP]. Если видите 404 — проверьте конфиг nginx и настройки облачного прокси (Azure, Cloudflare и др.).[/bold]", title="Self-signed SSL", border_style="yellow"))
-    inquirer.text(message="Нажмите Enter для выхода...").execute()
-
-    # После установки файлов панели и .env:
-    _ensure_nginx_pterodactyl()
-
-def _remove_pterodactyl_cron():
-    import subprocess
-    try:
-        res = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
-        if res.returncode != 0 or not res.stdout:
-            console.print("[yellow]Крон-задач не найдено или crontab пуст.[/yellow]")
-            return
-        lines = res.stdout.splitlines()
-        new_lines = [l for l in lines if 'php /var/www/pterodactyl/artisan schedule:run' not in l]
-        if len(new_lines) == len(lines):
-            console.print("[yellow]Крон-задача Pterodactyl не найдена.[/yellow]")
-            return
-        new_cron = '\n'.join(new_lines) + '\n' if new_lines else ''
-        p = subprocess.run(['crontab', '-'], input=new_cron, text=True)
-        if p.returncode == 0:
-            console.print("[green]Крон-задача Pterodactyl удалена![/green]")
-        else:
-            console.print("[red]Ошибка при удалении крон-задачи![/red]")
-    except Exception as e:
-        console.print(f"[red]Ошибка при работе с crontab: {e}[/red]")
-
-def _remove_pterodactyl_db():
-    import subprocess
-    import re
-    db_user = 'pterodactyl'
-    db_name = 'panel'
-    # Попробовать получить пароль из .env
-    env_path = '/var/www/pterodactyl/.env'
-    db_pass = None
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            env = f.read()
-            m = re.search(r'DB_PASSWORD=(.*)', env)
-            if m:
-                db_pass = m.group(1).strip()
-            m2 = re.search(r'DB_DATABASE=(.*)', env)
-            if m2:
-                db_name = m2.group(1).strip()
-            m3 = re.search(r'DB_USERNAME=(.*)', env)
-            if m3:
-                db_user = m3.group(1).strip()
-    # Пробуем через socket
-    sql = f"DROP DATABASE IF EXISTS {db_name}; DROP USER IF EXISTS '{db_user}'@'127.0.0.1'; FLUSH PRIVILEGES;"
-    res = subprocess.run(['mariadb', '-u', 'root', '--execute', sql], capture_output=True, text=True)
-    if res.returncode == 0:
-        console.print(f"[green]База данных и пользователь {db_name}/{db_user} удалены![/green]")
-        return
-    # Если не получилось — спросить пароль
-    root_pass = inquirer.text(message="MariaDB root-пароль (оставьте пустым для пропуска):").execute()
-    if not root_pass:
-        console.print("[yellow]Пропущено удаление БД: не удалось подключиться к MariaDB.[/yellow]")
-        return
-    res2 = subprocess.run(['mariadb', '-u', 'root', f'-p{root_pass}', '--execute', sql], capture_output=True, text=True)
-    if res2.returncode == 0:
-        console.print(f"[green]База данных и пользователь {db_name}/{db_user} удалены![/green]")
-    else:
-        console.print(f"[yellow]Не удалось удалить БД автоматически. Проверьте вручную![/yellow]")
-
-def pterodactyl_full_uninstall():
-    clear_console()
-    console.print(Panel("[red]Удаление Pterodactyl...[/red]", title="Удаление Pterodactyl", border_style="red"))
-    # 1. Остановка и удаление pteroq
-    console.print(Panel("Остановка и отключение systemd unit pteroq...", title="Шаг 1", border_style="yellow"))
-    run_command_with_dpkg_fix('systemctl stop pteroq.service', spinner_message="Остановка pteroq.service...")
-    run_command_with_dpkg_fix('systemctl disable pteroq.service', spinner_message="Отключение pteroq.service...")
-    run_command_with_dpkg_fix('rm -f /etc/systemd/system/pteroq.service', spinner_message="Удаление systemd unit...")
-    run_command_with_dpkg_fix('systemctl daemon-reload', spinner_message="Перезагрузка systemd...")
-    console.print("[green]systemd unit pteroq удалён![...]")
-    # 2. Удаление крон-задачи
-    console.print(Panel("Удаление крон-задачи...", title="Шаг 2: Крон", border_style="yellow"))
-    _remove_pterodactyl_cron()
-    # 3. Удаление nginx-конфига
-    console.print(Panel("Удаление nginx-конфига...", title="Шаг 3", border_style="yellow"))
-    run_command_with_dpkg_fix('rm -f /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf', spinner_message="Удаление nginx-конфига...")
-    run_command_with_dpkg_fix('systemctl restart nginx', spinner_message="Перезапуск nginx...")
-    console.print("[green]nginx-конфиг удалён и nginx перезапущен![...]")
-    # 4. Удаление SSL-сертификата Let's Encrypt
-    import shutil
-    import subprocess
-    domain = None
-    try:
-        # Попробовать найти домен из nginx-конфига
-        conf_path = "/etc/nginx/sites-available/pterodactyl.conf"
-        if os.path.exists(conf_path):
-            with open(conf_path, "r") as f:
-                import re
-                for line in f:
-                    m = re.search(r'server_name\s+([^;\s]+)', line)
-                    if m:
-                        domain = m.group(1)
-                        break
-    except Exception:
-        pass
-    if domain and shutil.which('certbot'):
-        console.print(Panel(f"Попытка удалить SSL-сертификат Let's Encrypt для домена: {domain}", title="Удаление SSL", border_style="yellow"))
-        try:
-            res = subprocess.run(["certbot", "delete", "--cert-name", domain, "--non-interactive"], capture_output=True, text=True)
-            if res.returncode == 0:
-                console.print(f"[green]SSL-сертификат для {domain} удалён![/green]")
-            else:
-                console.print(f"[yellow]Не удалось удалить сертификат автоматически. Проверьте вручную!\n{res.stderr or res.stdout}[/yellow]")
-        except Exception as e:
-            console.print(f"[yellow]Ошибка при удалении сертификата: {e}[/yellow]")
+        console.print(f"[yellow]Ошибка при установке прав на папку: {e}[/yellow]")
     # 5. Удаление файлов панели
     console.print(Panel("Удаление файлов панели...", title="Шаг 4", border_style="yellow"))
     run_command_with_dpkg_fix('rm -rf /var/www/pterodactyl', spinner_message="Удаление /var/www/pterodactyl...")
