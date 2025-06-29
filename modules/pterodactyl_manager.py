@@ -1236,3 +1236,49 @@ def _is_port_free(port):
         import subprocess
         subprocess.run(['systemctl', 'restart', 'nginx'])
         subprocess.run(['systemctl', 'restart', 'php8.3-fpm'])
+
+def _diagnose_ssl(domain):
+    import os
+    import subprocess
+    cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
+    key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
+    nginx_conf = '/etc/nginx/sites-available/pterodactyl.conf'
+    problems = []
+    # 1. Проверка наличия сертификата
+    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        problems.append(f"[red]Сертификат Let's Encrypt для {domain} не найден![/red]\nОжидался путь: {cert_path}")
+    # 2. Проверка nginx-конфига
+    ssl_block = False
+    if os.path.exists(nginx_conf):
+        with open(nginx_conf) as f:
+            conf = f.read()
+            if f"server_name {domain}" in conf and 'listen 443 ssl' in conf and 'ssl_certificate' in conf:
+                ssl_block = True
+            else:
+                problems.append("[red]В nginx-конфиге нет корректного блока server с listen 443 ssl и ssl_certificate![/red]")
+    else:
+        problems.append("[red]nginx-конфиг pterodactyl.conf не найден![/red]")
+    # 3. Проверка, слушает ли nginx порт 443
+    try:
+        res = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True)
+        if res.returncode == 0 and ':443' not in res.stdout:
+            problems.append("[red]nginx не слушает порт 443![/red]\nПроверьте, что nginx запущен и нет конфликтов по портам.")
+    except Exception:
+        pass
+    # 4. Проверка certbot
+    certbot_installed = shutil.which('certbot') is not None
+    if problems:
+        console.print(Panel("\n".join(problems), title="Диагностика SSL/HTTPS", border_style="red"))
+        if certbot_installed:
+            retry = inquirer.confirm(message=f"Попробовать получить сертификат Let's Encrypt для {domain} повторно?", default=True).execute()
+            if retry:
+                admin_email = f'admin@{domain}'
+                certbot_cmd = f"certbot --nginx --non-interactive --agree-tos -m {admin_email} -d {domain} --redirect"
+                res = run_command_with_dpkg_fix(certbot_cmd, spinner_message="Получение SSL-сертификата Let's Encrypt")
+                if res and res.returncode == 0:
+                    console.print(Panel(f"[green]SSL-сертификат успешно установлен![/green]\nПанель будет доступна по адресу: https://{domain}", title="Let's Encrypt SSL", border_style="green"))
+                    run_command_with_dpkg_fix("systemctl restart nginx", spinner_message="Перезапуск nginx")
+                else:
+                    console.print(Panel(f"[red]Не удалось получить SSL-сертификат для {domain}![/red]\n\nПроверьте DNS, порт 80, nginx-конфиг и повторите попытку вручную:\n[bold]sudo certbot --nginx -d {domain} --non-interactive --agree-tos -m {admin_email} --redirect[/bold]", title="Ошибка Let's Encrypt", border_style="red"))
+    else:
+        console.print(Panel(f"[green]SSL для {domain} настроен корректно![/green]", title="Диагностика SSL", border_style="green"))
