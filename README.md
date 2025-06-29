@@ -38,6 +38,7 @@
 | `webserver_manager.py`| Деплой сайтов, управление nginx, SSL          |
 | `pm2_manager.py`      | Управление процессами через PM2               |
 | `system_info.py`      | Системная информация (uptime, RAM, load)      |
+| `pterodactyl_manager.py`| Управление Pterodactyl Panel и Wings (установка, удаление, диагностика, меню) |
 | ...                   | ...                                           |
 
 ---
@@ -54,7 +55,7 @@
 - Open-source панель для управления игровыми серверами (Minecraft, CS:GO, Rust и др.)
 - Все игровые серверы запускаются в изолированных Docker-контейнерах через агент Wings
 - Требует Docker и Wings на каждом сервере-ноде
-- Управление установкой, статусом, удалением и быстрый доступ к веб-интерфейсу прямо из панели
+- Управление установкой, статусом, удалением и быстрый доступ к веб-интерфейсу теперь реализовано в отдельном модуле `pterodactyl_manager.py`
 - [Подробнее о Pterodactyl](https://pterodactyl.io/project/introduction.html)
 - [Документация по Wings](https://pterodactyl.io/wings/1.11/installing.html)
 
