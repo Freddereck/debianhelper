@@ -202,6 +202,8 @@ def _ensure_nginx_pterodactyl(domain=None, ssl=False):
                         break
     if not domain:
         domain = inquirer.text(message="Введите домен для панели (или IP):", default="panel.example.com").execute()
+    # Определяем актуальный php-fpm сокет
+    php_fpm_sock = get_installed_php_fpm_sock()
     # Генерируем конфиг
     conf = f'''
 server {{
@@ -212,9 +214,9 @@ server {{
     location / {{
         try_files $uri $uri/ /index.php?$query_string;
     }}
-    location ~ \.(php|phar)(/|$) {{
-        fastcgi_split_path_info ^(.+?\.ph(?:p|ar))(/.*)$;
-        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+    location ~ \\.(php|phar)(/|$) {{
+        fastcgi_split_path_info ^(.+?\\.ph(?:p|ar))(/.*)$;
+        fastcgi_pass unix:{php_fpm_sock};
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
@@ -222,7 +224,7 @@ server {{
         fastcgi_param HTTP_PROXY "";
         internal;
     }}
-    location ~ /\.ht {{
+    location ~ /\\.ht {{
         deny all;
     }}
     client_max_body_size 100m;
@@ -241,7 +243,7 @@ server {{
         raise Exception("nginx config error")
     # Перезапуск nginx
     subprocess.run(['systemctl', 'reload', 'nginx'])
-    console.print(Panel(f"[green]nginx сконфигурирован для панели {domain} и перезапущен![/green]", title="nginx", border_style="green"))
+    console.print(Panel(f"[green]nginx сконфигурирован для панели {domain} и перезапущен![green]", title="nginx", border_style="green"))
 
 def pterodactyl_install_wizard():
     import distro
@@ -522,7 +524,15 @@ def pterodactyl_install_wizard():
         defaults['db_port'] = inquirer.text(message="DB port:", default=defaults['db_port']).execute()
         defaults['db_name'] = inquirer.text(message="DB name:", default=defaults['db_name']).execute()
         defaults['db_user'] = inquirer.text(message="DB user:", default=defaults['db_user']).execute()
-        defaults['db_pass'] = inquirer.text(message="DB password:", default=defaults['db_pass']).execute()
+        db_pass_input = inquirer.text(message=f"DB password (Enter для автозаполнения):", default="").execute()
+        if not db_pass_input and defaults['db_pass']:
+            # Если пользователь ничего не ввёл, но пароль был сгенерирован — используем его
+            console.print(f"[yellow]Используется сгенерированный пароль для БД: {defaults['db_pass']}[/yellow]")
+            # (можно замаскировать, если нужно)
+            # console.print(f"[yellow]Используется сгенерированный пароль для БД: {'*'*len(defaults['db_pass'])}[/yellow]")
+            # defaults['db_pass'] уже содержит нужный пароль
+        else:
+            defaults['db_pass'] = db_pass_input
         defaults['mail_driver'] = inquirer.select(message="Mail driver:", choices=['smtp','sendmail','mailgun','mandrill','postmark'], default=defaults['mail_driver']).execute()
         defaults['mail_from'] = inquirer.text(message="Email отправителя (MAIL_FROM_ADDRESS):", default=defaults['mail_from']).execute()
         defaults['mail_name'] = inquirer.text(message="Имя отправителя (MAIL_FROM_NAME):", default=defaults['mail_name']).execute()
@@ -577,7 +587,15 @@ def pterodactyl_install_wizard():
         defaults['db_port'] = inquirer.text(message="DB port:", default=defaults['db_port']).execute()
         defaults['db_name'] = inquirer.text(message="DB name:", default=defaults['db_name']).execute()
         defaults['db_user'] = inquirer.text(message="DB user:", default=defaults['db_user']).execute()
-        defaults['db_pass'] = inquirer.text(message="DB password:", default=defaults['db_pass']).execute()
+        db_pass_input = inquirer.text(message=f"DB password (Enter для автозаполнения):", default="").execute()
+        if not db_pass_input and defaults['db_pass']:
+            # Если пользователь ничего не ввёл, но пароль был сгенерирован — используем его
+            console.print(f"[yellow]Используется сгенерированный пароль для БД: {defaults['db_pass']}[/yellow]")
+            # (можно замаскировать, если нужно)
+            # console.print(f"[yellow]Используется сгенерированный пароль для БД: {'*'*len(defaults['db_pass'])}[/yellow]")
+            # defaults['db_pass'] уже содержит нужный пароль
+        else:
+            defaults['db_pass'] = db_pass_input
     # После успешного теста — обновляем .env
     env_path = '/var/www/pterodactyl/.env'
     if os.path.exists(env_path):
@@ -630,13 +648,16 @@ def pterodactyl_install_wizard():
     admin_email = f"admin@{domain if 'domain' in locals() else 'localhost'}"
     admin_name = "admin"
     admin_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
-    # Попробуем автоматизировать через echo (если artisan поддерживает non-interactive)
-    user_cmd = f"cd /var/www/pterodactyl && echo -e '{admin_name}\n{admin_email}\n{admin_pass}\n{admin_pass}\n' | php artisan p:user:make"
+    user_cmd = (
+        f"cd /var/www/pterodactyl && php artisan p:user:make "
+        f"--email={admin_email} --username={admin_name} --name-first={admin_name} "
+        f"--name-last={admin_name} --password={admin_pass} --admin=1"
+    )
     res = run_command_with_dpkg_fix(user_cmd, spinner_message="Создание администратора панели...")
-    if res and res.returncode == 0 and 'User Created' in (res.stdout or ''):
+    if res and res.returncode == 0 and ('User Created' in (res.stdout or '') or 'UUID' in (res.stdout or '')):
         console.print(Panel(f"[green]Администратор создан автоматически![/green]\n\n[cyan]Email:[/cyan] {admin_email}\n[cyan]Имя:[/cyan] {admin_name}\n[cyan]Пароль:[/cyan] {admin_pass}", title="Админ создан", border_style="green"))
     else:
-        console.print(Panel("[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make[cyan]", title="Ручное создание админа", border_style="yellow"))
+        console.print(Panel("[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make --email=... --username=... --name-first=... --name-last=... --password=... --admin=1[cyan]", title="Ручное создание админа", border_style="yellow"))
         inquirer.text(message="Нажмите Enter, когда пользователь будет создан...").execute()
 
     # 16. Права на папку
@@ -998,3 +1019,12 @@ def test_db_connection(host, user, password, db, port=3306):
         return True
     except Exception as e:
         return str(e) 
+
+def get_installed_php_fpm_sock():
+    # Проверяем наличие сокетов php-fpm
+    for v in ['8.3', '8.2', '8.1', '8.0', '7.4']:
+        sock = f'/run/php/php{v}-fpm.sock'
+        if os.path.exists(sock):
+            return sock
+    # Фоллбек
+    return '/run/php/php8.3-fpm.sock'
