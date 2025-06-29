@@ -12,7 +12,20 @@ from InquirerPy.base.control import Choice
 from localization import get_string
 from modules.panel_utils import clear_console, run_command
 import re
-import pymysql
+# --- Автоматическая установка pymysql ---
+try:
+    import pymysql
+except ImportError:
+    import sys
+    import subprocess
+    print("[yellow]pymysql не найден, пробую установить...[/yellow]")
+    try:
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pymysql'])
+        import pymysql
+        print("[green]pymysql успешно установлен![/green]")
+    except Exception as e:
+        print(f"[red]Не удалось установить pymysql: {e}[/red]")
+        raise
 
 console = Console()
 
@@ -34,7 +47,7 @@ def _get_pterodactyl_info():
             conf = f.read()
             m = re.search(r'server_name\s+([^;\s]+)', conf)
             if m:
-                domain = m.group(1)
+                domain = m.group(1).replace('"', '').replace("'", "")
             m2 = re.search(r'listen\s+(\d+)(?:\s+ssl)?', conf)
             if m2:
                 port = m2.group(1)
@@ -47,6 +60,7 @@ def _get_pterodactyl_info():
         ip = '127.0.0.1'
     # Сформировать URL
     if domain:
+        domain = domain.replace('"', '').replace("'", "")
         url = f"{'https' if ssl else 'http'}://{domain}"
         if port and port not in ('80', '443'):
             url += f":{port}"
@@ -82,7 +96,7 @@ def pterodactyl_manage_menu():
     if not os.path.exists('/var/www/pterodactyl'):
         console.print(Panel("[red]Pterodactyl не установлен![/red]\n\n[bold yellow]Для управления сначала выполните установку панели.[/bold yellow]\n\n[cyan]Документация: https://pterodactyl.io/panel/1.11/getting_started.html[/cyan]", title="Pterodactyl не установлен", border_style="red"))
         choice = inquirer.select(
-            message="Выберите действие:",
+            message=get_string("pterodactyl_manage_menu_choice"),
             choices=[
                 "Установить Pterodactyl",
                 "Назад"
@@ -110,7 +124,7 @@ def pterodactyl_manage_menu():
             "Удалить Pterodactyl",
             "Назад"
         ]
-        action = inquirer.select(message="Выберите действие:", choices=choices).execute()
+        action = inquirer.select(message=get_string("pterodactyl_manage_menu_action"), choices=choices).execute()
         if action == "Открыть веб-панель":
             url = info['url'] or inquirer.text(message="Введите URL панели (например, https://your-domain):", default="https://127.0.0.1").execute()
             import webbrowser
@@ -130,7 +144,7 @@ def pterodactyl_manage_menu():
                 "php artisan --version",
                 "Назад"
             ]
-            artisan_cmd = inquirer.select(message="Выберите artisan-команду:", choices=artisan_choices).execute()
+            artisan_cmd = inquirer.select(message=get_string("pterodactyl_manage_menu_artisan_cmd"), choices=artisan_choices).execute()
             if artisan_cmd != "Назад":
                 res = run_command_with_dpkg_fix(f'cd /var/www/pterodactyl && {artisan_cmd}', spinner_message=f"{artisan_cmd} ...")
                 if res and res.returncode == 0:
@@ -148,7 +162,7 @@ def pterodactyl_manage_menu():
             if not _pteroq_unit_exists():
                 sys_choices.insert(0, "Создать systemd unit pteroq")
             sys_choices.append("Назад")
-            sys_cmd = inquirer.select(message="Выберите действие с pteroq:", choices=sys_choices).execute()
+            sys_cmd = inquirer.select(message=get_string("pterodactyl_manage_menu_pteroq_status"), choices=sys_choices).execute()
             if sys_cmd == "Создать systemd unit pteroq":
                 _create_pteroq_unit()
                 inquirer.text(message="Нажмите Enter для возврата...").execute()
@@ -180,7 +194,7 @@ def pterodactyl_manage_menu():
                 console.print(Panel((res.stderr or res.stdout or "[red]Ошибка версии[/red]"), title="Ошибка", border_style="red"))
             inquirer.text(message="Enter для возврата в меню...").execute()
         elif action == "Удалить Pterodactyl":
-            confirm = inquirer.confirm(message="Вы уверены, что хотите полностью удалить Pterodactyl?", default=False).execute()
+            confirm = inquirer.confirm(message=get_string("pterodactyl_manage_menu_delete_confirm"), default=False).execute()
             if confirm:
                 pterodactyl_full_uninstall()
                 break
@@ -202,6 +216,7 @@ def _ensure_nginx_pterodactyl(domain=None, ssl=False):
                         break
     if not domain:
         domain = inquirer.text(message="Введите домен для панели (или IP):", default="panel.example.com").execute()
+        domain = domain.replace('"', '').replace("'", "")
     # Определяем актуальный php-fpm сокет
     php_fpm_sock = get_installed_php_fpm_sock()
     # Генерируем конфиг
@@ -368,7 +383,7 @@ def pterodactyl_install_wizard():
 
     # 10. Инструкция/автоматизация по созданию БД
     console.print(Panel("[bold]Вам нужно создать базу данных и пользователя для Pterodactyl.[/bold]\n\nМожно сделать это автоматически или вручную.\n", title="Шаг 9: База данных", border_style="yellow"))
-    auto_db = inquirer.confirm(message="Создать базу данных и пользователя автоматически?", default=True).execute()
+    auto_db = inquirer.confirm(message=get_string("pterodactyl_manage_menu_db_auto"), default=True).execute()
     if auto_db:
         import secrets
         import string
@@ -376,7 +391,7 @@ def pterodactyl_install_wizard():
         db_name = "panel"
         db_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
         console.print(f"[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}")
-        use_socket = inquirer.confirm(message="Пробовать подключение к MariaDB как root через unix_socket (без пароля)?", default=True).execute()
+        use_socket = inquirer.confirm(message=get_string("pterodactyl_manage_menu_db_socket"), default=True).execute()
         sql = f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;"
         if use_socket:
             cmd = f"mariadb -u root --execute=\"{sql}\""
@@ -498,28 +513,28 @@ def pterodactyl_install_wizard():
         'mail_pass': get_env_value('MAIL_PASSWORD', ''),
         'mail_encryption': get_env_value('MAIL_ENCRYPTION', ''),
     }
-    use_menu = inquirer.confirm(message="Хотите настроить параметры панели вручную (рекомендуется для production)?", default=False).execute()
+    use_menu = inquirer.confirm(message=get_string("pterodactyl_manage_menu_settings"), default=False).execute()
     if use_menu:
-        defaults['author'] = inquirer.text(message="Email для экспорта яиц (Egg Author Email):", default=defaults['author']).execute()
+        defaults['author'] = inquirer.text(message=get_string("pterodactyl_manage_menu_egg_author_email"), default=defaults['author']).execute()
         url_choices = [
             f"Текущий: {defaults['url']}",
             f"Использовать IP сервера ({get_default_ip()})",
             "Ввести вручную..."
         ]
-        url_choice = inquirer.select(message="URL панели:", choices=url_choices, default=url_choices[0]).execute()
+        url_choice = inquirer.select(message=get_string("pterodactyl_manage_menu_url_choice"), choices=url_choices, default=url_choices[0]).execute()
         if url_choice.startswith("Использовать IP сервера"):
             defaults['url'] = f"https://{get_default_ip()}"
         elif url_choice == "Ввести вручную...":
             defaults['url'] = inquirer.text(message="Введите URL панели (https://...):", default=defaults['url']).execute()
         defaults['timezone'] = inquirer.text(message="Часовой пояс (например, UTC):", default=defaults['timezone']).execute()
-        defaults['cache'] = inquirer.select(message="Кэш-драйвер:", choices=['redis','memcached','file'], default=defaults['cache']).execute()
-        defaults['session'] = inquirer.select(message="Session-драйвер:", choices=['redis','memcached','database','file','cookie'], default=defaults['session']).execute()
-        defaults['queue'] = inquirer.select(message="Queue-драйвер:", choices=['redis','database','sync'], default=defaults['queue']).execute()
+        defaults['cache'] = inquirer.select(message=get_string("pterodactyl_manage_menu_cache_driver"), choices=['redis','memcached','file'], default=defaults['cache']).execute()
+        defaults['session'] = inquirer.select(message=get_string("pterodactyl_manage_menu_session_driver"), choices=['redis','memcached','database','file','cookie'], default=defaults['session']).execute()
+        defaults['queue'] = inquirer.select(message=get_string("pterodactyl_manage_menu_queue_driver"), choices=['redis','database','sync'], default=defaults['queue']).execute()
         defaults['redis_host'] = inquirer.text(message="Redis host:", default=defaults['redis_host']).execute()
         defaults['redis_port'] = inquirer.text(message="Redis port:", default=defaults['redis_port']).execute()
         defaults['redis_pass'] = inquirer.text(message="Redis password (оставьте пустым если нет):", default=defaults['redis_pass']).execute()
-        defaults['settings_ui'] = inquirer.confirm(message="Включить UI-редактор настроек?", default=defaults['settings_ui']=='false').execute()
-        defaults['telemetry'] = inquirer.confirm(message="Включить отправку анонимной телеметрии?", default=defaults['telemetry']=='true').execute()
+        defaults['settings_ui'] = inquirer.confirm(message=get_string("pterodactyl_manage_menu_settings_ui"), default=defaults['settings_ui']=='false').execute()
+        defaults['telemetry'] = inquirer.confirm(message=get_string("pterodactyl_manage_menu_telemetry"), default=defaults['telemetry']=='true').execute()
         defaults['db_host'] = inquirer.text(message="DB host:", default=defaults['db_host']).execute()
         defaults['db_port'] = inquirer.text(message="DB port:", default=defaults['db_port']).execute()
         defaults['db_name'] = inquirer.text(message="DB name:", default=defaults['db_name']).execute()
@@ -696,6 +711,7 @@ def pterodactyl_install_wizard():
     change_domain = inquirer.confirm(message=f"Текущий домен/IP панели: {domain}. Хотите изменить/установить свой домен?", default=False).execute()
     if change_domain:
         domain = inquirer.text(message="Введите домен для панели (например, panel.example.com):", default=domain).execute()
+        domain = domain.replace('"', '').replace("'", "")
         # Сохраняем в .env
         if os.path.exists(env_path):
             lines = []
