@@ -12,6 +12,7 @@ from InquirerPy.base.control import Choice
 from localization import get_string
 from modules.panel_utils import clear_console, run_command
 import re
+import pymysql
 
 console = Console()
 
@@ -561,6 +562,43 @@ def pterodactyl_install_wizard():
         f"--password={defaults['mail_pass']}",
         f"--encryption={defaults['mail_encryption']}",
     ]
+    # После создания пользователя и БД, перед artisan:
+    while True:
+        test_result = test_db_connection(defaults['db_host'], defaults['db_user'], defaults['db_pass'], defaults['db_name'], defaults['db_port'])
+        if test_result is True:
+            break
+        console.print(Panel(f"[red]Не удалось подключиться к MariaDB:[/red]\n{test_result}", title="Ошибка подключения к БД", border_style="red"))
+        retry = inquirer.confirm(message="Ввести параметры БД вручную?", default=True).execute()
+        if not retry:
+            console.print("[yellow]Будет повторена попытка с текущими параметрами.[/yellow]")
+            continue
+        # Меню ручного ввода
+        defaults['db_host'] = inquirer.text(message="DB host:", default=defaults['db_host']).execute()
+        defaults['db_port'] = inquirer.text(message="DB port:", default=defaults['db_port']).execute()
+        defaults['db_name'] = inquirer.text(message="DB name:", default=defaults['db_name']).execute()
+        defaults['db_user'] = inquirer.text(message="DB user:", default=defaults['db_user']).execute()
+        defaults['db_pass'] = inquirer.text(message="DB password:", default=defaults['db_pass']).execute()
+    # После успешного теста — обновляем .env
+    env_path = '/var/www/pterodactyl/.env'
+    if os.path.exists(env_path):
+        lines = []
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith('DB_HOST='):
+                    lines.append(f'DB_HOST={defaults["db_host"]}\n')
+                elif line.startswith('DB_PORT='):
+                    lines.append(f'DB_PORT={defaults["db_port"]}\n')
+                elif line.startswith('DB_DATABASE='):
+                    lines.append(f'DB_DATABASE={defaults["db_name"]}\n')
+                elif line.startswith('DB_USERNAME='):
+                    lines.append(f'DB_USERNAME={defaults["db_user"]}\n')
+                elif line.startswith('DB_PASSWORD='):
+                    lines.append(f'DB_PASSWORD={defaults["db_pass"]}\n')
+                else:
+                    lines.append(line)
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+    # artisan будет вызван с этими параметрами
     # Запуск команд
     for cmd, args, title in [
         ('php artisan p:environment:setup', setup_args, 'App Settings'),
@@ -952,3 +990,11 @@ WantedBy=multi-user.target
     subprocess.run(['systemctl', 'daemon-reload'])
     subprocess.run(['systemctl', 'enable', '--now', 'pteroq.service'])
     console.print('[green]systemd unit pteroq создан и запущен![/green]') 
+
+def test_db_connection(host, user, password, db, port=3306):
+    try:
+        conn = pymysql.connect(host=host, user=user, password=password, database=db, port=int(port), connect_timeout=3)
+        conn.close()
+        return True
+    except Exception as e:
+        return str(e) 
