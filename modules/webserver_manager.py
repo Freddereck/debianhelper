@@ -856,6 +856,33 @@ def _show_sites_manager():
             break
         _site_actions_menu(site)
 
+def _uninstall_nginx():
+    confirm = inquirer.confirm(message="Вы уверены, что хотите полностью удалить nginx и все его конфиги?", default=False).execute()
+    if not confirm:
+        return
+    res = run_command(["apt-get", "purge", "-y", "nginx", "nginx-common", "nginx-full"], "Удаление nginx...")
+    if res and res.returncode == 0:
+        console.print("[green]nginx успешно удалён![/green]")
+        run_command(["rm", "-rf", "/etc/nginx"], "Удаление /etc/nginx...")
+    else:
+        console.print("[red]Не удалось удалить nginx.[/red]")
+        if res and res.stderr:
+            console.print(Panel(res.stderr, title="[red]Ошибка[/red]", border_style="red"))
+    inquirer.text(message="Нажмите Enter для продолжения...").execute()
+
+def _uninstall_certbot():
+    confirm = inquirer.confirm(message="Вы уверены, что хотите полностью удалить certbot?", default=False).execute()
+    if not confirm:
+        return
+    res = run_command(["apt-get", "purge", "-y", "certbot", "python3-certbot-nginx"], "Удаление certbot...")
+    if res and res.returncode == 0:
+        console.print("[green]certbot успешно удалён![/green]")
+    else:
+        console.print("[red]Не удалось удалить certbot.[/red]")
+        if res and res.stderr:
+            console.print(Panel(res.stderr, title="[red]Ошибка[/red]", border_style="red"))
+    inquirer.text(message="Нажмите Enter для продолжения...").execute()
+
 def run_webserver_manager():
     # --- Автоматическая проверка nginx ---
     if not shutil.which("nginx"):
@@ -925,6 +952,8 @@ def run_webserver_manager():
         choices = [
             Choice("install_nginx", name="Установить/проверить Nginx"),
             Choice("install_certbot", name="Установить/проверить Certbot (SSL)"),
+            Choice("uninstall_nginx", name="Удалить nginx"),
+            Choice("uninstall_certbot", name="Удалить certbot"),
             Choice("deploy_nodejs", name="Задеплоить Node.js/Next.js проект с GitHub"),
             Choice("deploy_existing", name="Додеплоить проект из существующей папки"),
             Choice("sites_manager", name=get_string("sites_manager_menu")),
@@ -945,6 +974,10 @@ def run_webserver_manager():
         elif action == "install_certbot":
             _install_certbot()
             inquirer.text(message="Нажмите Enter для продолжения...").execute()
+        elif action == "uninstall_nginx":
+            _uninstall_nginx()
+        elif action == "uninstall_certbot":
+            _uninstall_certbot()
         elif action == "deploy_nodejs":
             _deploy_nodejs_project()
         elif action == "deploy_existing":
