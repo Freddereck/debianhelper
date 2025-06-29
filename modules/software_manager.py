@@ -1169,3 +1169,127 @@ def check_pterodactyl_dependencies():
     else:
         console.print(Panel("[green]Все основные зависимости для Pterodactyl найдены![/green]", title="[green]Проверка зависимостей[/green]", border_style="green"))
     inquirer.text(message=get_string("press_enter_to_continue")).execute() 
+
+def pterodactyl_diagnose_and_install():
+    from rich.panel import Panel
+    import subprocess, shutil, os, socket
+    def log(msg, ok=True):
+        color = 'green' if ok else 'red'
+        console.print(f"[bold {color}]{'✓' if ok else '✗'}[/bold {color}] {msg}")
+    def try_install(pkg):
+        res = subprocess.run(f"apt-get install -y {pkg}", shell=True, capture_output=True, text=True)
+        if res.returncode == 0:
+            log(f"{pkg} установлен!", True)
+            return True
+        else:
+            log(f"Не удалось установить {pkg}: {res.stderr or res.stdout}", False)
+            return False
+    # 1. Проверка root
+    if os.geteuid() != 0:
+        log("Скрипт должен быть запущен с root (sudo)", False)
+        return
+    log("Права root — OK")
+    # 2. Проверка интернета
+    try:
+        socket.create_connection(("github.com", 443), timeout=3)
+        socket.create_connection(("pterodactyl.io", 443), timeout=3)
+        log("Интернет-соединение — OK")
+    except Exception:
+        log("Нет доступа к github.com или pterodactyl.io", False)
+        return
+    # 3. Проверка и установка зависимостей
+    deps = [
+        ("curl", "curl"),
+        ("bash", "bash"),
+        ("systemctl", "systemd"),
+        ("git", "git"),
+        ("tar", "tar"),
+        ("unzip", "unzip"),
+        ("php", "php8.2"),
+        ("composer", None),
+        ("mysql", "mariadb-server"),
+        ("redis-server", "redis-server"),
+        ("nginx", "nginx"),
+        ("node", "nodejs"),
+        ("yarn", "yarn"),
+        ("docker", "docker.io"),
+    ]
+    for bin_name, pkg in deps:
+        found = shutil.which(bin_name)
+        if not found:
+            log(f"Не найден {bin_name}", False)
+            if pkg:
+                log(f"Пробую установить {pkg}...", False)
+                try_install(pkg)
+            elif bin_name == "composer":
+                log("Пробую установить composer...", False)
+                res = subprocess.run("curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer", shell=True, capture_output=True, text=True)
+                if res.returncode == 0:
+                    log("composer установлен!", True)
+                else:
+                    log(f"Не удалось установить composer: {res.stderr or res.stdout}", False)
+        else:
+            log(f"{bin_name} — OK")
+    # 4. Проверка версии PHP
+    res = subprocess.run("php -v", shell=True, capture_output=True, text=True)
+    if res.returncode == 0 and ("8.2" in res.stdout or "8.3" in res.stdout):
+        log(f"PHP версия {res.stdout.splitlines()[0]} — OK")
+    else:
+        log("Требуется PHP 8.2+ (найдено: {0})".format(res.stdout.splitlines()[0] if res.stdout else "N/A"), False)
+        log("Добавьте репозиторий и установите php8.2 или php8.3", False)
+        return
+    # 5. Проверка расширений PHP
+    needed_exts = ["cli", "openssl", "gd", "mysql", "pdo", "mbstring", "tokenizer", "bcmath", "xml", "curl", "zip", "fpm"]
+    res = subprocess.run("php -m", shell=True, capture_output=True, text=True)
+    missing_exts = [e for e in needed_exts if e not in res.stdout]
+    if missing_exts:
+        log(f"Не хватает расширений PHP: {', '.join(missing_exts)}", False)
+        log(f"Установите: apt install php8.2-{' php8.2-'.join(missing_exts)}", False)
+        return
+    else:
+        log("Все необходимые расширения PHP установлены")
+    # 6. Проверка MySQL/MariaDB
+    if not shutil.which('mysql') and not shutil.which('mariadb'):
+        log("Не найден mysql/mariadb", False)
+        return
+    log("MySQL/MariaDB — OK")
+    # 7. Проверка Redis
+    if not shutil.which('redis-server'):
+        log("Не найден redis-server", False)
+        return
+    log("redis-server — OK")
+    # 8. Проверка nginx
+    if not shutil.which('nginx'):
+        log("Не найден nginx", False)
+        return
+    log("nginx — OK")
+    # 9. Проверка nodejs/yarn
+    if not shutil.which('node'):
+        log("Не найден nodejs", False)
+        return
+    if not shutil.which('yarn'):
+        log("Не найден yarn", False)
+        return
+    log("nodejs и yarn — OK")
+    # 10. Проверка docker
+    if not shutil.which('docker'):
+        log("Не найден docker", False)
+        return
+    log("docker — OK")
+    # 11. Проверка портов 80/443
+    for port in (80, 443):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("0.0.0.0", port))
+            s.close()
+            log(f"Порт {port} свободен")
+        except OSError:
+            log(f"Порт {port} занят!", False)
+    # 12. Проверка доступа к github.com и pterodactyl.io уже была выше
+    # 13. Если всё ок — запуск автоустановки
+    log("Все проверки пройдены! Можно запускать установку.", True)
+    confirm = inquirer.confirm(message="Запустить автоматическую установку панели?", default=True).execute()
+    if confirm:
+        pterodactyl_auto_install(mode='auto')
+    else:
+        log("Установка отменена пользователем", False) 
