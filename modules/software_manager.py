@@ -300,109 +300,28 @@ def _handle_install(key):
 
     # --- Custom Install Command ---
     if "install_cmd" in data:
-        if key == "3x-ui":
-            with tempfile.NamedTemporaryFile(mode="w+", delete=False) as tmpf:
-                tmp_path = tmpf.name
-            try:
-                import subprocess
-                process = subprocess.Popen(
-                    data["install_cmd"],
-                    shell=True,
-                    stdout=open(tmp_path, "w"),
-                    stderr=subprocess.STDOUT,
-                    executable="/bin/bash"
-                )
-                import time
-                from rich.live import Live
-                from rich.panel import Panel
-                with Live(Panel("[yellow]Установка 3x-ui...[/yellow]"), refresh_per_second=2) as live:
-                    while process.poll() is None:
-                        time.sleep(1)
-                        try:
-                            with open(tmp_path, "r") as f:
-                                out = f.read()[-2000:]
-                            live.update(Panel(out or "[yellow]Установка 3x-ui...[/yellow]", title="3x-ui: вывод установки", border_style="yellow"))
-                        except Exception:
-                            pass
-                    with open(tmp_path, "r") as f:
-                        out = f.read()[-2000:]
-                    live.update(Panel(out or "[yellow]Установка 3x-ui завершена[/yellow]", title="3x-ui: вывод установки", border_style="green"))
-                res_code = process.returncode
-            finally:
-                import os
-                os.remove(tmp_path)
-            if res_code == 0:
-                console.print(get_string("install_success", package=data['display_name']))
-                # Парсим вывод установки для логина/пароля/порта/пути
-                username = password = port = webpath = access_url = None
-                # Парсим вывод
-                for line in out.splitlines():
-                    if line.strip().startswith("Username:"):
-                        username = line.split(":",1)[1].strip()
-                    elif line.strip().startswith("Password:"):
-                        password = line.split(":",1)[1].strip()
-                    elif line.strip().startswith("Port:"):
-                        port = line.split(":",1)[1].strip()
-                    elif line.strip().startswith("WebBasePath:"):
-                        webpath = line.split(":",1)[1].strip()
-                    elif line.strip().startswith("Access URL:"):
-                        access_url = line.split(":",1)[1].strip()
-                # Если не удалось — пробуем получить из x-ui settings
-                if not access_url or not username or not password:
-                    settings_res = run_command(["x-ui", "settings"])
-                    if settings_res and settings_res.stdout:
-                        p, w, a = _parse_xui_settings(settings_res.stdout)
-                        if p:
-                            port = p
-                        if w:
-                            webpath = w
-                        if a:
-                            access_url = a
-                # Формируем гайд
-                if access_url and username and password:
-                    guide = f'''[bold green]Как начать работу с 3x-ui:[/bold green]
-
-1. Откройте браузер и перейдите по адресу: [cyan]{access_url}[/cyan]
-   Логин: [bold]{username}[/bold]
-   Пароль: [bold]{password}[/bold]
-
-2. В панели вы сможете создавать и управлять конфигурациями WireGuard, Xray, V2Ray и др.
-
-3. Для подробной документации посетите: https://github.com/MHSanaei/3x-ui/wiki
-'''
-                else:
-                    # Если есть порт, но нет access_url, формируем ссылку вручную
-                    if port:
-                        url = f"http://<IP_вашего_сервера>:{port}"
-                        if webpath:
-                            url += f"/{webpath}"
-                    else:
-                        url = "http://<IP_вашего_сервера>:54321"
-                    guide = f'''[bold green]Как начать работу с 3x-ui:[/bold green]
-
-1. Откройте браузер и перейдите по адресу: [cyan]{url}[/cyan]
-   Логин/пароль по умолчанию: [bold]admin/admin[/bold] (или смотрите вывод установки выше)
-
-2. В панели вы сможете создавать и управлять конфигурациями WireGuard, Xray, V2Ray и др.
-
-3. Для подробной документации посетите: https://github.com/MHSanaei/3x-ui/wiki
-'''
-                console.print(Panel(guide, title="[bold blue]Гайд по первому запуску 3x-ui[/bold blue]", border_style="blue"))
-            else:
-                console.print(get_string("install_fail", package=data['display_name']))
+        try:
+            res = run_command(data["install_cmd"], get_string("installing", package=data['display_name']))
+        except FileNotFoundError as e:
+            console.print(Panel(f"[red]Команда не найдена: {e}[/red]", title="[red]Ошибка установки[/red]", border_style="red"))
             inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
             return
-        # --- Обычная логика для остальных ---
-        res = run_command(data["install_cmd"], get_string("installing", package=data['display_name']))
         if res and res.returncode == 0:
             console.print(get_string("install_success", package=data['display_name']))
             if data.get("show_output_on_success") and res.stdout:
                 console.print(res.stdout.strip())
         else:
-            console.print(get_string("install_fail", package=data['display_name']))
-            if res:
-                console.print(Panel(res.stderr, title="[red]Детали ошибки[/red]", border_style="red"))
-        inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
+            err_out = (res.stderr or '') + '\n' + (res.stdout or '') if res else ''
+            console.print(Panel(err_out.strip() or '[red]Неизвестная ошибка[/red]', title="[red]Детали ошибки[/red]", border_style="red"))
+            # Fallback: советы и ссылки
+            if key in ("webmin", "pterodactyl", "wings"):
+                doc_links = {
+                    "webmin": "https://www.webmin.com/",
+                    "pterodactyl": "https://pterodactyl.io/panel/1.11/getting_started.html",
+                    "wings": "https://pterodactyl.io/wings/1.11/installing.html"
+                }
+                console.print(Panel(f"[yellow]Попробуйте ручную установку по инструкции: {doc_links[key]}[/yellow]", title="[yellow]Что делать?[/yellow]", border_style="yellow"))
+            inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
         return
 
     # --- EXISTING: Standard Apt Install ---
@@ -470,84 +389,63 @@ def _handle_uninstall(key):
     if not confirmed:
         return
 
-    # --- NEW: Custom Uninstall Command ---
-    if key == "3x-ui":
-        import time
-        import shutil
-        import subprocess
-        xui_path = "/usr/bin/x-ui"
-        xui_real_path = "/usr/local/x-ui/x-ui"
-        service_path = "/etc/systemd/system/x-ui.service"
-        # Останавливаем сервис перед удалением
-        run_command(["systemctl", "stop", "x-ui"], "Остановка сервиса x-ui перед удалением...")
-        # Запускаем удаление в отдельном процессе
+    # --- Custom Uninstall Command ---
+    if "uninstall_cmd" in data:
         try:
-            proc = subprocess.Popen([xui_path, "uninstall"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        except FileNotFoundError:
-            proc = None
-        # Ждём максимум 10 секунд, либо пока исчезнет бинарник
-        for _ in range(20):
-            if not os.path.exists(xui_path) and not os.path.exists(xui_real_path):
-                break
-            time.sleep(0.5)
-        # Если процесс ещё жив — даём ему ещё 2 секунды, потом убиваем
-        if proc and proc.poll() is None:
-            try:
-                proc.terminate()
-                time.sleep(2)
-                if proc.poll() is None:
-                    proc.kill()
-            except Exception:
-                pass
-        # Проверяем факт удаления
-        removed = not os.path.exists(xui_path) and not os.path.exists(xui_real_path)
-        service_removed = not os.path.exists(service_path)
-        if removed:
+            res = run_command(data["uninstall_cmd"], get_string("uninstalling", package=data['display_name']))
+        except FileNotFoundError as e:
+            console.print(Panel(f"[red]Команда не найдена: {e}[/red]", title="[red]Ошибка удаления[/red]", border_style="red"))
+            inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
+            return
+        if res and res.returncode == 0:
             console.print(get_string("uninstall_success", package=data['display_name']))
-            if service_removed:
-                console.print("[green]Systemd-сервис x-ui также удалён.[/green]")
-            else:
-                # Попытка удалить systemd unit
-                try:
-                    os.remove(service_path)
-                    run_command(["systemctl", "daemon-reload"], "Перезагрузка systemd...")
-                    console.print("[green]Systemd unit x-ui.service был удалён автоматически и systemd перезагружен.[/green]")
-                except Exception as e:
-                    console.print(f"[yellow]Внимание: systemd unit x-ui.service ещё существует и не был удалён автоматически: {e}\nПроверьте вручную.[/yellow]")
         else:
-            # Попытка удалить файлы вручную через os.remove
-            import errno
-            failed = []
-            for path in [xui_path, xui_real_path]:
-                if os.path.exists(path):
-                    try:
-                        os.remove(path)
-                        console.print(f"[green]Удалён файл: {path}[/green]")
-                    except Exception as e:
-                        failed.append((path, str(e)))
-            # Повторная проверка
-            removed2 = not os.path.exists(xui_path) and not os.path.exists(xui_real_path)
-            service_removed2 = not os.path.exists(service_path)
-            if removed2:
-                console.print(get_string("uninstall_success", package=data['display_name']))
-                if service_removed2:
-                    console.print("[green]Systemd-сервис x-ui также удалён.[/green]")
+            err_out = (res.stderr or '') + '\n' + (res.stdout or '') if res else ''
+            console.print(Panel(err_out.strip() or '[red]Неизвестная ошибка[/red]', title="[red]Детали ошибки[/red]", border_style="red"))
+            # Fallback: ручное удаление
+            if key in ("webmin", "pterodactyl", "wings"):
+                manual_steps = []
+                if key == "webmin":
+                    manual_steps = [
+                        (['systemctl', 'stop', 'webmin'], "Остановка сервиса webmin..."),
+                        (['systemctl', 'disable', 'webmin'], "Отключение автозапуска webmin..."),
+                        (['rm', '-rf', '/etc/webmin', '/var/webmin'], "Удаление конфигов webmin..."),
+                        (['apt-get', 'purge', '-y', 'webmin'], "Удаление пакета webmin..."),
+                        (['systemctl', 'daemon-reload'], "Перезагрузка systemd...")
+                    ]
+                elif key == "pterodactyl":
+                    manual_steps = [
+                        (['systemctl', 'stop', 'pterodactyl-panel'], "Остановка сервиса pterodactyl-panel..."),
+                        (['systemctl', 'disable', 'pterodactyl-panel'], "Отключение автозапуска..."),
+                        (['rm', '-rf', '/var/www/pterodactyl', '/etc/systemd/system/pterodactyl*'], "Удаление файлов панели..."),
+                        (['systemctl', 'daemon-reload'], "Перезагрузка systemd...")
+                    ]
+                elif key == "wings":
+                    manual_steps = [
+                        (['systemctl', 'stop', 'wings'], "Остановка сервиса wings..."),
+                        (['systemctl', 'disable', 'wings'], "Отключение автозапуска..."),
+                        (['rm', '-f', '/etc/systemd/system/wings.service', '/usr/local/bin/wings'], "Удаление файлов wings..."),
+                        (['systemctl', 'daemon-reload'], "Перезагрузка systemd...")
+                    ]
+                all_ok = True
+                for cmd, msg in manual_steps:
+                    res2 = run_command(cmd, msg)
+                    if res2 and res2.returncode != 0:
+                        all_ok = False
+                        console.print(Panel(res2.stderr or f"Ошибка при выполнении: {' '.join(cmd)}", title="[red]Ошибка ручного удаления[/red]", border_style="red"))
+                if all_ok:
+                    console.print(Panel(f"{data['display_name']} и все его следы были удалены вручную!", title="[green]Удаление завершено[/green]", border_style="green"))
                 else:
-                    try:
-                        os.remove(service_path)
-                        run_command(["systemctl", "daemon-reload"], "Перезагрузка systemd...")
-                        console.print("[green]Systemd unit x-ui.service был удалён автоматически и systemd перезагружен.[/green]")
-                    except Exception as e:
-                        console.print(f"[yellow]Внимание: systemd unit x-ui.service ещё существует и не был удалён автоматически: {e}\nПроверьте вручную.[/yellow]")
-            else:
-                console.print(get_string("uninstall_fail", package=data['display_name']))
-                for path, err in failed:
-                    console.print(f"[red]Не удалось удалить {path}: {err}[/red]")
-                if os.path.exists(xui_path):
-                    console.print(f"[red]Бинарник x-ui не был удалён: {xui_path}[/red]")
-                if os.path.exists(xui_real_path):
-                    console.print(f"[red]Бинарник x-ui не был удалён: {xui_real_path}[/red]")
-        inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
+                    console.print(Panel("Некоторые шаги удаления завершились с ошибкой. Проверьте вывод выше и удалите остатки вручную.", title="[yellow]Удаление частично завершено[/yellow]", border_style="yellow"))
+            # Fallback: советы и ссылки
+            if key in ("webmin", "pterodactyl", "wings"):
+                doc_links = {
+                    "webmin": "https://www.webmin.com/",
+                    "pterodactyl": "https://pterodactyl.io/panel/1.11/getting_started.html",
+                    "wings": "https://pterodactyl.io/wings/1.11/installing.html"
+                }
+                console.print(Panel(f"[yellow]Попробуйте ручное удаление по инструкции: {doc_links[key]}[/yellow]", title="[yellow]Что делать?[/yellow]", border_style="yellow"))
+            inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
         return
     # --- Обычная логика для остальных ---
     if "uninstall_cmd" in data:
@@ -604,22 +502,25 @@ def _handle_uninstall(key):
 
 def _handle_version_check(key):
     data = SUPPORTED_SOFTWARE[key]
-    res = run_command(data['version_cmd'].split(), spinner_message=f"Checking version for {data['display_name']}...")
-    
-    clear_console()
+    try:
+        res = run_command(data['version_cmd'].split(), spinner_message=f"Checking version for {data['display_name']}...")
+    except FileNotFoundError as e:
+        console.print(Panel(f"[red]Команда не найдена: {e}[/red]", title="[red]Ошибка версии[/red]", border_style="red"))
+        inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
+        return
     if res and res.returncode == 0:
-        console.print(Panel(
-            f"[bold cyan]{get_string('version_info', package=data['display_name'])}[/bold cyan]\n\n{res.stdout.strip()}",
-            title="Version",
-            border_style="cyan"
-        ))
+        console.print(Panel(f"[bold cyan]{get_string('version_info', package=data['display_name'])}[/bold cyan]\n\n{res.stdout.strip()}", title="Version", border_style="cyan"))
     else:
-        console.print(Panel(
-            f"Could not retrieve version for {data['display_name']}.",
-            title="[red]Error[/red]",
-            border_style="red"
-        ))
-    inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
+        err_out = (res.stderr or '') + '\n' + (res.stdout or '') if res else ''
+        console.print(Panel(err_out.strip() or '[red]Не удалось получить версию[/red]', title="[red]Ошибка версии[/red]", border_style="red"))
+        if key in ("webmin", "pterodactyl", "wings"):
+            doc_links = {
+                "webmin": "https://www.webmin.com/",
+                "pterodactyl": "https://pterodactyl.io/panel/1.11/getting_started.html",
+                "wings": "https://pterodactyl.io/wings/1.11/installing.html"
+            }
+            console.print(Panel(f"[yellow]Проверьте документацию: {doc_links[key]}[/yellow]", title="[yellow]Что делать?[/yellow]", border_style="yellow"))
+        inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
 
 def _show_service_menu(key):
     """Shows the service management menu for a package."""
