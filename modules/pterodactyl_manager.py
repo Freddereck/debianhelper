@@ -374,19 +374,38 @@ def pterodactyl_install_wizard():
         db_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
         console.print(f"[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}")
         use_socket = inquirer.confirm(message="Пробовать подключение к MariaDB как root через unix_socket (без пароля)?", default=True).execute()
+        sql = f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;"
         if use_socket:
-            cmd = f"mariadb -u root --execute=\"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;\""
+            cmd = f"mariadb -u root --execute=\"{sql}\""
         else:
             root_pass = inquirer.text(message="Введите пароль root MariaDB:").execute()
-            cmd = f"mariadb -u root -p{root_pass} --execute=\"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;\""
+            cmd = f"mariadb -u root -p{root_pass} --execute=\"{sql}\""
         res = run_command_with_dpkg_fix(cmd, spinner_message="Создание БД и пользователя...")
         if res and res.returncode == 0:
+            # Прописываем DB_HOST=127.0.0.1 в .env
+            env_path = '/var/www/pterodactyl/.env'
+            if os.path.exists(env_path):
+                lines = []
+                with open(env_path) as f:
+                    for line in f:
+                        if line.startswith('DB_HOST='):
+                            lines.append('DB_HOST=127.0.0.1\n')
+                        elif line.startswith('DB_PASSWORD='):
+                            lines.append(f'DB_PASSWORD={db_pass}\n')
+                        elif line.startswith('DB_USERNAME='):
+                            lines.append(f'DB_USERNAME={db_user}\n')
+                        elif line.startswith('DB_DATABASE='):
+                            lines.append(f'DB_DATABASE={db_name}\n')
+                        else:
+                            lines.append(line)
+                with open(env_path, 'w') as f:
+                    f.writelines(lines)
             console.print(Panel(f"[green]База данных и пользователь успешно созданы![green]\n\n[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}\n\n[bold yellow]Сохраните эти параметры![bold yellow]", title="БД создана", border_style="green"))
         else:
             console.print(Panel(f"[red]Ошибка автоматического создания БД![red]\n\nПопробуйте выполнить шаг вручную.\n\n[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[cyan]\n\n[cyan]CREATE USER '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}';\nCREATE DATABASE {db_name};\nGRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;\nexit[cyan]", title="Ошибка создания БД", border_style="red"))
             inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
     else:
-        console.print(Panel("[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[cyan]\n\n[cyan]CREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY 'yourPassword';\nCREATE DATABASE panel;\nGRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;\nexit[cyan]\n\n[bold yellow]Скопируйте команды выше и выполните их в отдельном терминале![bold yellow]", title="Ручное создание БД", border_style="yellow"))
+        console.print(Panel("[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[cyan]\n\n[cyan]CREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY 'yourPassword';\nCREATE DATABASE panel;\nGRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;\nexit[cyan]\n\n[bold yellow]Скопируйте команды выше и выполните их в отдельном терминале![bold yellow]", title="Ручное создание БД", border_style="yellow"))
         inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
 
     # 11. Установка зависимостей через composer
