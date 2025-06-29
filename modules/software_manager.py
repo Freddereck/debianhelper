@@ -194,6 +194,7 @@ echo "---------------"
         "service_start_cmd": "systemctl start pterodactyl-panel",
         "service_stop_cmd": "systemctl stop pterodactyl-panel",
         "service_restart_cmd": "systemctl restart pterodactyl-panel",
+        "auto_install": True,  # Флаг для расширенной автоматизации
     },
     "wings": {
         "display_name": "Wings (Pterodactyl Node)",
@@ -962,6 +963,52 @@ def webmin_settings_menu():
                     console.print(get_string('webmin_autostart_off'))
         elif choice == get_string('webmin_settings_back'):
             break 
+
+def pterodactyl_auto_install(mode='auto'):
+    from rich.panel import Panel
+    import subprocess, shutil, os
+    def run_step(cmd, msg, critical=True):
+        console.print(Panel(msg, title="[yellow]Установка Pterodactyl[/yellow]", border_style="yellow"))
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        if res.returncode == 0:
+            if res.stdout:
+                console.print(Panel(res.stdout.strip(), title="[green]Успех[/green]", border_style="green"))
+            return True
+        else:
+            console.print(Panel(res.stderr or res.stdout or '[red]Неизвестная ошибка[/red]', title="[red]Ошибка[/red]", border_style="red"))
+            if critical:
+                inquirer.text(message=get_string("press_enter_to_continue")).execute()
+                return False
+            return True
+    # 1. Проверка и установка зависимостей
+    deps = [
+        "software-properties-common curl apt-transport-https ca-certificates gnupg",
+        "php8.3 php8.3-common php8.3-cli php8.3-gd php8.3-mysql php8.3-mbstring php8.3-bcmath php8.3-xml php8.3-fpm php8.3-curl php8.3-zip",
+        "mariadb-server nginx tar unzip git redis-server nodejs yarn"
+    ]
+    if mode in ('auto', 'deps'):
+        run_step("apt update", "Обновление списка пакетов...")
+        run_step(f"apt install -y {' '.join(deps)}", "Установка зависимостей...")
+        # Composer
+        if not shutil.which('composer'):
+            run_step("curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer", "Установка composer...")
+    if mode == 'deps':
+        console.print(Panel("[green]Проверка и установка зависимостей завершена![/green]", title="[green]Готово[/green]", border_style="green"))
+        return
+    # 2. Скачивание и распаковка панели
+    run_step("mkdir -p /var/www/pterodactyl", "Создание директории панели...")
+    run_step("cd /var/www/pterodactyl && curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz", "Скачивание архива панели...")
+    run_step("cd /var/www/pterodactyl && tar -xzvf panel.tar.gz", "Распаковка панели...")
+    run_step("cd /var/www/pterodactyl && chmod -R 755 storage/* bootstrap/cache/", "Права на storage и cache...")
+    # 3. Composer install
+    run_step("cd /var/www/pterodactyl && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader", "Установка зависимостей PHP (composer)...")
+    # 4. Копирование .env
+    run_step("cd /var/www/pterodactyl && cp .env.example .env", "Создание .env...")
+    # 5. Artisan key:generate
+    run_step("cd /var/www/pterodactyl && php artisan key:generate --force", "Генерация APP_KEY...")
+    # 6. Вывод инструкции по настройке БД и пользователя
+    console.print(Panel("[yellow]Дальнейшие шаги требуют ручной настройки БД, .env, миграций и создания пользователя. Следуйте официальному гайду: https://pterodactyl.io/panel/1.0/getting_started.html#installation[/yellow]", title="[yellow]Внимание[/yellow]", border_style="yellow"))
+    inquirer.text(message=get_string("press_enter_to_continue")).execute()
 
 def pterodactyl_manage_menu():
     def get_panel_url():
