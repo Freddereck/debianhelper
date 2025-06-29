@@ -1,9 +1,3 @@
-# Новый модуль для Pterodactyl и Wings
-# Содержит все функции: pterodactyl_manage_menu, pterodactyl_install_wizard, pterodactyl_diagnose_and_install, pterodactyl_auto_install, pterodactyl_full_uninstall, check_pterodactyl_dependencies, wings_manage_menu и все вспомогательные для них.
-# Импорты: rich, inquirer, shutil, os, subprocess, socket, time, platform, distro, webbrowser, get_string, run_command, clear_console, Panel, Choice, и др.
-# Весь код, относящийся к этим функциям, переносится из software_manager.py сюда.
-# В software_manager.py оставляю только SUPPORTED_SOFTWARE и вызовы-обёртки, которые импортируют эти функции отсюда. 
-
 import os
 import shutil
 import subprocess
@@ -20,15 +14,21 @@ from modules.panel_utils import clear_console, run_command
 
 console = Console()
 
-# --- Pterodactyl и Wings ---
-# (Весь код, который был в software_manager.py, теперь здесь)
-# ... (сюда вставить все функции, которые были удалены из software_manager.py выше) ... 
-
-# --- Pterodactyl Panel Management ---
 def pterodactyl_manage_menu():
-    # Меню управления Pterodactyl Panel
-    # Статус, установка, удаление, диагностика, artisan, systemd, nginx, SSL
-    pass  # TODO: реализовать
+    clear_console()
+    if not os.path.exists('/var/www/pterodactyl'):
+        console.print(Panel("[red]Pterodactyl не установлен![/red]\n\n[bold yellow]Для управления сначала выполните установку панели.[/bold yellow]\n\n[cyan]Документация: https://pterodactyl.io/panel/1.11/getting_started.html[/cyan]", title="Pterodactyl не установлен", border_style="red"))
+        choice = inquirer.select(
+            message="Выберите действие:",
+            choices=[
+                "Установить Pterodactyl",
+                "Назад"
+            ]).execute()
+        if choice == "Установить Pterodactyl":
+            pterodactyl_install_wizard()
+        return
+    # ... здесь будет обычное меню управления, если установлен ...
+    # TODO: реализовать полноценное меню управления
 
 def pterodactyl_install_wizard():
     import distro
