@@ -1264,65 +1264,70 @@ def _remove_pterodactyl_db():
     import re
     from InquirerPy import inquirer
     env_path = '/var/www/pterodactyl/.env'
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            env = f.read()
-        db_user = re.search(r'DB_USERNAME=(.*)', env)
-        db_pass = re.search(r'DB_PASSWORD=(.*)', env)
-        db_name = re.search(r'DB_DATABASE=(.*)', env)
-        if not (db_user and db_pass and db_name):
-            console.print('[yellow]Не удалось найти параметры БД в .env, пробую автоматический поиск[/yellow]')
-        else:
-            db_user = db_user.group(1).strip()
-            db_pass = db_pass.group(1).strip()
-            db_name = db_name.group(1).strip()
-            try:
-                conn = pymysql.connect(host='127.0.0.1', user='root')
-                with conn.cursor() as cur:
-                    cur.execute(f"DROP DATABASE IF EXISTS `{db_name}`;")
-                    cur.execute(f"DROP USER IF EXISTS '{db_user}'@'127.0.0.1';")
-                    cur.execute(f"DROP USER IF EXISTS '{db_user}'@'localhost';")
-                    cur.execute("FLUSH PRIVILEGES;")
-                conn.commit()
-                conn.close()
-                console.print(f"[green]База данных {db_name} и пользователь {db_user} удалены![/green]")
+    def try_remove_db_and_users(pymysql_kwargs):
+        try:
+            conn = pymysql.connect(**pymysql_kwargs)
+            with conn.cursor() as cur:
+                # Найти базы
+                cur.execute("SHOW DATABASES LIKE '%panel%';")
+                panel_dbs = [row[0] for row in cur.fetchall()]
+                cur.execute("SHOW DATABASES LIKE '%pterodactyl%';")
+                ptero_dbs = [row[0] for row in cur.fetchall()]
+                all_dbs = list(set(panel_dbs + ptero_dbs))
+                # Найти пользователей
+                cur.execute("SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%';")
+                users = cur.fetchall()
+                # Удаление баз
+                for db in all_dbs:
+                    confirm = inquirer.confirm(message=f"Удалить базу данных {db}?", default=True).execute()
+                    if confirm:
+                        try:
+                            cur.execute(f"DROP DATABASE IF EXISTS `{db}`;")
+                            console.print(f"[green]База данных {db} удалена.[/green]")
+                        except Exception as e:
+                            console.print(f"[yellow]Ошибка при удалении базы {db}: {e}[/yellow]")
+                # Удаление пользователей
+                for user, host in users:
+                    confirm = inquirer.confirm(message=f"Удалить пользователя {user}@{host}?", default=True).execute()
+                    if confirm:
+                        try:
+                            cur.execute(f"DROP USER IF EXISTS '{user}'@'{host}';")
+                            console.print(f"[green]Пользователь {user}@{host} удалён.[/green]")
+                        except Exception as e:
+                            console.print(f"[yellow]Ошибка при удалении пользователя {user}@{host}: {e}[/yellow]")
+                cur.execute("FLUSH PRIVILEGES;")
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            return e
+    # 1. Попытка через root без пароля
+    result = try_remove_db_and_users({'host': '127.0.0.1', 'user': 'root'})
+    if result is True:
+        return
+    # 2. Если ошибка доступа — спросить пароль
+    if isinstance(result, Exception) and 'Access denied' in str(result):
+        ask = inquirer.confirm(message="MariaDB требует пароль root. Ввести пароль?", default=True).execute()
+        if ask:
+            root_pass = inquirer.text(message="Введите пароль root MariaDB:").execute()
+            result2 = try_remove_db_and_users({'host': '127.0.0.1', 'user': 'root', 'password': root_pass})
+            if result2 is True:
                 return
-            except Exception as e:
-                console.print(f"[yellow]Ошибка при удалении БД или пользователя: {e}[/yellow]")
-                return
-    # Если .env нет или параметры не найдены — автоматический поиск
-    try:
-        conn = pymysql.connect(host='127.0.0.1', user='root')
-        with conn.cursor() as cur:
-            # Найти базы
-            cur.execute("SHOW DATABASES LIKE '%panel%';")
-            panel_dbs = [row[0] for row in cur.fetchall()]
-            cur.execute("SHOW DATABASES LIKE '%pterodactyl%';")
-            ptero_dbs = [row[0] for row in cur.fetchall()]
-            all_dbs = list(set(panel_dbs + ptero_dbs))
-            # Найти пользователей
-            cur.execute("SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%';")
-            users = cur.fetchall()
-            # Удаление баз
-            for db in all_dbs:
-                confirm = inquirer.confirm(message=f"Удалить базу данных {db}?", default=True).execute()
-                if confirm:
-                    try:
-                        cur.execute(f"DROP DATABASE IF EXISTS `{db}`;")
-                        console.print(f"[green]База данных {db} удалена.[/green]")
-                    except Exception as e:
-                        console.print(f"[yellow]Ошибка при удалении базы {db}: {e}[/yellow]")
-            # Удаление пользователей
-            for user, host in users:
-                confirm = inquirer.confirm(message=f"Удалить пользователя {user}@{host}?", default=True).execute()
-                if confirm:
-                    try:
-                        cur.execute(f"DROP USER IF EXISTS '{user}'@'{host}';")
-                        console.print(f"[green]Пользователь {user}@{host} удалён.[/green]")
-                    except Exception as e:
-                        console.print(f"[yellow]Ошибка при удалении пользователя {user}@{host}: {e}[/yellow]")
-            cur.execute("FLUSH PRIVILEGES;")
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        console.print(f"[yellow]Ошибка при автоматическом поиске и удалении БД/пользователей: {e}[/yellow]")
+            else:
+                console.print(f"[yellow]Ошибка при удалении с паролем: {result2}[/yellow]")
+    # 3. Если всё равно не удалось — показать инструкцию
+    console.print("[red]Не удалось автоматически подключиться к MariaDB как root. Удалите базы и пользователей вручную через консоль MariaDB:[/red]")
+    console.print("""
+1. Войдите в MariaDB:
+   sudo mariadb
+2. Посмотрите базы:
+   SHOW DATABASES LIKE '%panel%';
+   SHOW DATABASES LIKE '%pterodactyl%';
+3. Удалите базы:
+   DROP DATABASE имя_базы;
+4. Посмотрите пользователей:
+   SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%';
+5. Удалите пользователей:
+   DROP USER 'пользователь'@'хост';
+6. FLUSH PRIVILEGES;
+""")
