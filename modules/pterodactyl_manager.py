@@ -890,8 +890,11 @@ def pterodactyl_install_wizard():
             elif action == "Сбросить пароль для существующего пользователя":
                 reset_email = inquirer.text(message="Email пользователя для сброса пароля:", default=admin_email).execute()
                 new_pass = inquirer.text(message="Новый пароль:", default=admin_pass).execute()
-                reset_cmd = f"cd /var/www/pterodactyl && php artisan p:user:password {reset_email} --password={new_pass}"
-                res2 = run_command_with_dpkg_fix(reset_cmd, spinner_message="Сброс пароля администратора...")
+                # Сбросить пароль через tinker
+                tinker_cmd = (
+                    f"php artisan tinker --execute=\"$user = \\Pterodactyl\\Models\\User::where('email', '{reset_email}')->first(); $user->password = bcrypt('{new_pass}'); $user->save();\""
+                )
+                res2 = run_command_with_dpkg_fix(f"cd /var/www/pterodactyl && {tinker_cmd}", spinner_message="Сброс пароля администратора...")
                 if res2 and res2.returncode == 0:
                     console.print(Panel(f"[green]Пароль для {reset_email} успешно сброшен! Новый пароль: {new_pass}", title="Пароль сброшен", border_style="green"))
                 else:
