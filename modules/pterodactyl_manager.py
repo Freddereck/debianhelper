@@ -51,8 +51,16 @@ def _get_pterodactyl_info():
             m2 = re.search(r'listen\s+(\d+)(?:\s+ssl)?', conf)
             if m2:
                 port = m2.group(1)
+            # ssl_certificate должен быть в конфиге И nginx реально слушает 443
             if 'ssl_certificate' in conf:
-                ssl = True
+                # Проверяем, слушает ли nginx 443
+                import subprocess
+                try:
+                    res = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True)
+                    if res.returncode == 0 and ':443' in res.stdout:
+                        ssl = True
+                except Exception:
+                    pass
     # Получить IP сервера
     try:
         ip = socket.gethostbyname(socket.gethostname())
@@ -68,6 +76,35 @@ def _get_pterodactyl_info():
         url = f"{'https' if ssl else 'http'}://{ip}"
         if port and port not in ('80', '443'):
             url += f":{port}"
+    # Проверка APP_URL в .env
+    app_url = None
+    if os.path.exists(db_path):
+        with open(db_path) as f:
+            env = f.read()
+            m = re.search(r'APP_URL=(.*)', env)
+            if m:
+                app_url = m.group(1).strip()
+    # Если ssl=True, а APP_URL не https — автоматически исправить
+    if ssl and app_url and not app_url.startswith('https://'):
+        # Автоматическая правка .env
+        with open(db_path, 'r') as f:
+            lines = f.readlines()
+        with open(db_path, 'w') as f:
+            for line in lines:
+                if line.startswith('APP_URL='):
+                    f.write(f'APP_URL=https://{domain}\n')
+                else:
+                    f.write(line)
+        console.print(Panel(f"[green]APP_URL в .env автоматически исправлен на https://{domain}!\nПерезапускаю nginx и php-fpm...[/green]", title="APP_URL исправлен", border_style="green"))
+        # Перезапуск сервисов
+        import subprocess
+        subprocess.run(['systemctl', 'restart', 'nginx'])
+        subprocess.run(['systemctl', 'restart', 'php8.3-fpm'])
+        # Обновить app_url для дальнейшего использования
+        app_url = f'https://{domain}'
+    # Если ssl=True, а APP_URL не https — предупреждение
+    if ssl and app_url and not app_url.startswith('https://'):
+        console.print(Panel(f"[yellow]Внимание: SSL включён, но APP_URL в .env не начинается с https!\nТекущий APP_URL: {app_url}\nРекомендуется исправить на https://{domain} и перезапустить nginx и php-fpm.[/yellow]", title="APP_URL и SSL", border_style="yellow"))
     # Данные БД (если есть)
     db_info = None
     db_path = '/var/www/pterodactyl/.env'
@@ -1101,3 +1138,14 @@ def get_installed_php_fpm_sock():
             return sock
     # Фоллбек
     return '/run/php/php8.3-fpm.sock'
+
+# --- ДОБАВИТЬ функцию проверки порта ---
+def _is_port_free(port):
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("", port))
+        s.close()
+        return True
+    except OSError:
+        return False
