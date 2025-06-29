@@ -382,7 +382,7 @@ def pterodactyl_install_wizard():
     console.print("[green]Файлы панели скачаны и распакованы![green]")
 
     # 10. Инструкция/автоматизация по созданию БД
-    console.print(Panel("[bold]Вам нужно создать базу данных и пользователя для Pterodactyl.[/bold]\n\nМожно сделать это автоматически или вручную.\n", title="Шаг 9: База данных", border_style="yellow"))
+    console.print(Panel(get_string("pterodactyl_db_step_panel"), title="Шаг 9: База данных", border_style="yellow"))
     auto_db = inquirer.confirm(message=get_string("pterodactyl_manage_menu_db_auto"), default=True).execute()
     if auto_db:
         import secrets
@@ -391,6 +391,7 @@ def pterodactyl_install_wizard():
         db_name = "panel"
         db_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
         console.print(f"[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}")
+        console.print(Panel(get_string("pterodactyl_manage_menu_db_socket_help"), title="Подсказка", border_style="cyan"))
         use_socket = inquirer.confirm(message=get_string("pterodactyl_manage_menu_db_socket"), default=True).execute()
         sql = f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;"
         if use_socket:
@@ -515,6 +516,7 @@ def pterodactyl_install_wizard():
     }
     use_menu = inquirer.confirm(message=get_string("pterodactyl_manage_menu_settings"), default=False).execute()
     if use_menu:
+        console.print(Panel(get_string("pterodactyl_manage_menu_settings_help"), title="Подсказка", border_style="cyan"))
         defaults['author'] = inquirer.text(message=get_string("pterodactyl_manage_menu_egg_author_email"), default=defaults['author']).execute()
         url_choices = [
             f"Текущий: {defaults['url']}",
@@ -541,11 +543,7 @@ def pterodactyl_install_wizard():
         defaults['db_user'] = inquirer.text(message="DB user:", default=defaults['db_user']).execute()
         db_pass_input = inquirer.text(message=f"DB password (Enter для автозаполнения):", default="").execute()
         if not db_pass_input and defaults['db_pass']:
-            # Если пользователь ничего не ввёл, но пароль был сгенерирован — используем его
             console.print(f"[yellow]Используется сгенерированный пароль для БД: {defaults['db_pass']}[/yellow]")
-            # (можно замаскировать, если нужно)
-            # console.print(f"[yellow]Используется сгенерированный пароль для БД: {'*'*len(defaults['db_pass'])}[/yellow]")
-            # defaults['db_pass'] уже содержит нужный пароль
         else:
             defaults['db_pass'] = db_pass_input
         defaults['mail_driver'] = inquirer.select(message="Mail driver:", choices=['smtp','sendmail','mailgun','mandrill','postmark'], default=defaults['mail_driver']).execute()
@@ -604,11 +602,7 @@ def pterodactyl_install_wizard():
         defaults['db_user'] = inquirer.text(message="DB user:", default=defaults['db_user']).execute()
         db_pass_input = inquirer.text(message=f"DB password (Enter для автозаполнения):", default="").execute()
         if not db_pass_input and defaults['db_pass']:
-            # Если пользователь ничего не ввёл, но пароль был сгенерирован — используем его
             console.print(f"[yellow]Используется сгенерированный пароль для БД: {defaults['db_pass']}[/yellow]")
-            # (можно замаскировать, если нужно)
-            # console.print(f"[yellow]Используется сгенерированный пароль для БД: {'*'*len(defaults['db_pass'])}[/yellow]")
-            # defaults['db_pass'] уже содержит нужный пароль
         else:
             defaults['db_pass'] = db_pass_input
     # После успешного теста — обновляем .env
