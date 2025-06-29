@@ -18,6 +18,7 @@ import socket
 
 from localization import get_string
 from modules.panel_utils import clear_console, run_command, is_root
+from modules.pterodactyl_manager import pterodactyl_manage_menu
 
 console = Console()
 
