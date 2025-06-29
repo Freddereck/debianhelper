@@ -1313,17 +1313,55 @@ def pterodactyl_install_wizard():
     from rich.panel import Panel
     import subprocess, shutil, os
     import time
+    import platform
+    import distro
     console.print(Panel("[bold cyan]Пошаговая установка Pterodactyl по официальной документации[/bold cyan]", title="Pterodactyl Install Wizard", border_style="cyan"))
-    # 1. Установка зависимостей
+    # 1. Установка базовых зависимостей
     steps = [
         ("Установка базовых зависимостей", "apt -y install software-properties-common curl apt-transport-https ca-certificates gnupg"),
-        ("Добавление репозитория PHP (Ubuntu)", "LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php"),
+    ]
+    for msg, cmd in steps:
+        res = run_command(cmd, spinner_message=msg)
+        if res and res.returncode == 0:
+            console.print(f"[green]✔ {msg}[/green]")
+        else:
+            console.print(Panel(res.stderr or res.stdout or '[red]Неизвестная ошибка[/red]', title=f"[red]Ошибка: {msg}[/red]", border_style="red"))
+            if not inquirer.confirm(message="Продолжить установку? (рекомендуется устранить ошибку)", default=False).execute():
+                return
+    # --- Опциональный шаг: добавление PPA для PHP ---
+    distro_id = ''
+    try:
+        import distro as distro_mod
+        distro_id = distro_mod.id().lower()
+    except ImportError:
+        try:
+            with open('/etc/os-release') as f:
+                for line in f:
+                    if line.startswith('ID='):
+                        distro_id = line.strip().split('=',1)[1].strip('"').lower()
+                        break
+        except Exception:
+            pass
+    if 'ubuntu' in distro_id:
+        do_ppa = inquirer.confirm(message="Вы на Ubuntu. Добавить PPA для свежего PHP? (ppa:ondrej/php)", default=True).execute()
+        if do_ppa:
+            res = run_command("LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php", spinner_message="Добавление репозитория PHP (Ubuntu)")
+            if res and res.returncode == 0:
+                console.print(f"[green]✔ Добавление PPA ondrej/php[/green]")
+            else:
+                console.print(Panel(res.stderr or res.stdout or '[red]Неизвестная ошибка[/red]', title=f"[red]Ошибка: Добавление PPA[/red]", border_style="red"))
+                if not inquirer.confirm(message="Продолжить установку? (рекомендуется устранить ошибку)", default=False).execute():
+                    return
+    else:
+        console.print("[yellow]Шаг с добавлением PPA для PHP пропущен (вы не на Ubuntu). Для Debian этот шаг не требуется![/yellow]")
+    # --- Далее остальные шаги как раньше ---
+    steps2 = [
         ("Добавление репозитория Redis", "curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg && echo 'deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main' | sudo tee /etc/apt/sources.list.d/redis.list"),
         ("Обновление списка пакетов", "apt update"),
         ("Установка PHP, MariaDB, nginx, Redis и других зависимостей", "apt -y install php8.3 php8.3-common php8.3-cli php8.3-gd php8.3-mysql php8.3-mbstring php8.3-bcmath php8.3-xml php8.3-fpm php8.3-curl php8.3-zip mariadb-server nginx tar unzip git redis-server"),
         ("Установка Composer", "curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer"),
     ]
-    for msg, cmd in steps:
+    for msg, cmd in steps2:
         res = run_command(cmd, spinner_message=msg)
         if res and res.returncode == 0:
             console.print(f"[green]✔ {msg}[/green]")
