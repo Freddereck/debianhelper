@@ -433,6 +433,13 @@ def pterodactyl_install_wizard():
                     break
     if not domain or domain in ("localhost", "127.0.0.1"):
         domain = get_default_ip()
+    def get_env_value(key, default=None):
+        if os.path.exists(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith(key + '='):
+                        return line.strip().split('=',1)[1]
+        return default
     # Дефолты
     defaults = {
         'author': get_env_value('APP_SERVICE_AUTHOR', 'admin@' + domain),
