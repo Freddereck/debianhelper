@@ -159,6 +159,8 @@ def pterodactyl_manage_menu():
             "Просмотр логов панели",
             "Просмотр логов pteroq",
             "Проверить версию панели",
+            "Изменить домен панели",  # NEW
+            "Проверить/создать SSL-сертификат",  # NEW
             "Удалить Pterodactyl",
             "Назад"
         ]
@@ -231,6 +233,56 @@ def pterodactyl_manage_menu():
             else:
                 console.print(Panel((res.stderr or res.stdout or "[red]Ошибка версии[/red]"), title="Ошибка", border_style="red"))
             inquirer.text(message="Enter для возврата в меню...").execute()
+        elif action == "Изменить домен панели":
+            new_domain = inquirer.text(message="Введите новый домен для панели:", default=info['url'].replace('https://','').replace('http://','').split(':')[0]).execute()
+            new_domain = new_domain.replace('"', '').replace("'", "")
+            # Обновить nginx-конфиг (без ssl)
+            _ensure_nginx_pterodactyl(domain=new_domain, ssl=info['ssl'])
+            # Обновить APP_URL в .env
+            env_path = '/var/www/pterodactyl/.env'
+            if os.path.exists(env_path):
+                with open(env_path, 'r') as f:
+                    lines = f.readlines()
+                with open(env_path, 'w') as f:
+                    for line in lines:
+                        if line.startswith('APP_URL='):
+                            proto = 'https' if info['ssl'] else 'http'
+                            f.write(f'APP_URL={proto}://{new_domain}\n')
+                        else:
+                            f.write(line)
+            # Перезапуск сервисов
+            import subprocess
+            subprocess.run(['systemctl', 'restart', 'nginx'])
+            subprocess.run(['systemctl', 'restart', 'php8.3-fpm'])
+            console.print(Panel(f"[green]Домен панели изменён на {new_domain}! nginx и php-fpm перезапущены.[/green]", title="Домен изменён", border_style="green"))
+            inquirer.text(message="Нажмите Enter для возврата в меню...").execute()
+            continue
+        elif action == "Проверить/создать SSL-сертификат":
+            domain = info['url'].replace('https://','').replace('http://','').split(':')[0]
+            cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
+            key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
+            import os
+            cert_exists = os.path.exists(cert_path) and os.path.exists(key_path)
+            if cert_exists:
+                console.print(Panel(f"[green]SSL-сертификат для {domain} уже существует![/green]", title="SSL OK", border_style="green"))
+            else:
+                console.print(Panel(f"[yellow]SSL-сертификат для {domain} не найден![/yellow]", title="SSL отсутствует", border_style="yellow"))
+                try_create = inquirer.confirm(message=f"Попробовать создать сертификат Let's Encrypt для {domain}?", default=True).execute()
+                if try_create:
+                    admin_email = f'admin@{domain}'
+                    certbot_cmd = f"certbot --nginx --non-interactive --agree-tos -m {admin_email} -d {domain} --redirect"
+                    res = run_command_with_dpkg_fix(certbot_cmd, spinner_message="Получение SSL-сертификата Let's Encrypt")
+                    if res and res.returncode == 0:
+                        console.print(Panel(f"[green]SSL-сертификат успешно установлен![/green]", title="Let's Encrypt SSL", border_style="green"))
+                    else:
+                        console.print(Panel(f"[red]Не удалось получить SSL-сертификат для {domain}![/red]", title="Ошибка Let's Encrypt", border_style="red"))
+            # После создания/проверки сертификата — перегенерировать nginx-конфиг с ssl=True
+            _ensure_nginx_pterodactyl(domain=domain, ssl=True)
+            import subprocess
+            subprocess.run(['systemctl', 'restart', 'nginx'])
+            console.print(Panel(f"[green]nginx сконфигурирован для SSL и перезапущен![/green]", title="nginx", border_style="green"))
+            inquirer.text(message="Нажмите Enter для возврата в меню...").execute()
+            continue
         elif action == "Удалить Pterodactyl":
             confirm = inquirer.confirm(message=get_string("pterodactyl_manage_menu_delete_confirm"), default=False).execute()
             if confirm:
@@ -257,8 +309,44 @@ def _ensure_nginx_pterodactyl(domain=None, ssl=False):
         domain = domain.replace('"', '').replace("'", "")
     # Определяем актуальный php-fpm сокет
     php_fpm_sock = get_installed_php_fpm_sock()
-    # Генерируем конфиг
-    conf = f'''
+    # --- NEW: Генерируем оба блока если ssl=True ---
+    conf = ""
+    if ssl:
+        conf += f'''
+server {{
+    listen 80;
+    server_name {domain};
+    return 301 https://$host$request_uri;
+}}
+server {{
+    listen 443 ssl;
+    server_name {domain};
+    root /var/www/pterodactyl/public;
+    index index.php index.html index.htm;
+    ssl_certificate /etc/letsencrypt/live/{domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{domain}/privkey.pem;
+    location / {{
+        try_files $uri $uri/ /index.php?$query_string;
+    }}
+    location ~ \\.(php|phar)(/|$) {{
+        fastcgi_split_path_info ^(.+?\\.ph(?:p|ar))(/.*)$;
+        fastcgi_pass unix:{php_fpm_sock};
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param HTTP_PROXY "";
+        internal;
+    }}
+    location ~ /\\.ht {{
+        deny all;
+    }}
+    client_max_body_size 100m;
+    sendfile off;
+}}
+'''
+    else:
+        conf += f'''
 server {{
     listen 80;
     server_name {domain};
@@ -417,6 +505,14 @@ def pterodactyl_install_wizard():
     run_command_with_dpkg_fix('cd /var/www/pterodactyl && curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz', spinner_message="Скачивание архива панели...")
     run_command_with_dpkg_fix('cd /var/www/pterodactyl && tar -xzvf panel.tar.gz', spinner_message="Распаковка архива...")
     run_command_with_dpkg_fix('cd /var/www/pterodactyl && chmod -R 755 storage/* bootstrap/cache/', spinner_message="Права на storage и cache...")
+    # --- NEW: Создание storage/logs и laravel.log, выставление прав ---
+    import os
+    os.makedirs('/var/www/pterodactyl/storage/logs', exist_ok=True)
+    with open('/var/www/pterodactyl/storage/logs/laravel.log', 'a') as f:
+        pass
+    run_command_with_dpkg_fix('chown -R www-data:www-data /var/www/pterodactyl/storage /var/www/pterodactyl/bootstrap/cache', spinner_message="Права на storage и cache...")
+    run_command_with_dpkg_fix('chmod -R 775 /var/www/pterodactyl/storage /var/www/pterodactyl/bootstrap/cache', spinner_message="Права на storage и cache...")
+    run_command_with_dpkg_fix('chmod 664 /var/www/pterodactyl/storage/logs/laravel.log', spinner_message="Права на laravel.log...")
     console.print("[green]Файлы панели скачаны и распакованы![green]")
 
     # 10. Инструкция/автоматизация по созданию БД
@@ -1117,3 +1213,44 @@ def _diagnose_ssl(domain):
                     console.print(Panel(f"[red]Не удалось получить SSL-сертификат для {domain}![/red]\n\nПроверьте DNS, порт 80, nginx-конфиг и повторите попытку вручную:\n[bold]sudo certbot --nginx -d {domain} --non-interactive --agree-tos -m {admin_email} --redirect[/bold]", title="Ошибка Let's Encrypt", border_style="red"))
     else:
         console.print(Panel(f"[green]SSL для {domain} настроен корректно![/green]", title="Диагностика SSL", border_style="green"))
+
+def pterodactyl_full_uninstall():
+    import os
+    import subprocess
+    from rich.panel import Panel
+    # 1. Остановить и удалить systemd unit pteroq
+    subprocess.run(['systemctl', 'stop', 'pteroq.service'])
+    subprocess.run(['systemctl', 'disable', 'pteroq.service'])
+    if os.path.exists('/etc/systemd/system/pteroq.service'):
+        os.remove('/etc/systemd/system/pteroq.service')
+    subprocess.run(['systemctl', 'daemon-reload'])
+    # 2. Удалить папку панели
+    subprocess.run(['rm', '-rf', '/var/www/pterodactyl'])
+    # 3. Удалить nginx-конфиг панели
+    for path in [
+        '/etc/nginx/sites-available/pterodactyl.conf',
+        '/etc/nginx/sites-enabled/pterodactyl.conf'
+    ]:
+        if os.path.exists(path):
+            os.remove(path)
+    # 4. Удалить сертификаты Let's Encrypt (если есть)
+    env_path = '/var/www/pterodactyl/.env'
+    domain = None
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith('APP_URL='):
+                    domain = line.strip().split('=',1)[1].replace('https://','').replace('http://','').split(':')[0]
+                    break
+    if domain:
+        cert_path = f'/etc/letsencrypt/live/{domain}'
+        if os.path.exists(cert_path):
+            subprocess.run(['certbot', 'delete', '--cert-name', domain, '--non-interactive', '--quiet'])
+            subprocess.run(['rm', '-rf', f'/etc/letsencrypt/live/{domain}', f'/etc/letsencrypt/archive/{domain}', f'/etc/letsencrypt/renewal/{domain}.conf'])
+    # 5. Удалить базу данных и пользователя
+    _remove_pterodactyl_db()
+    # 6. Перезапустить nginx
+    subprocess.run(['systemctl', 'reload', 'nginx'])
+    # 7. Сообщение
+    console.print(Panel("[green]Pterodactyl и все связанные файлы, сертификаты и настройки удалены![/green]", title="Удаление завершено", border_style="green"))
+    inquirer.text(message="Нажмите Enter для выхода...").execute()
