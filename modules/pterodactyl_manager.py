@@ -27,8 +27,86 @@ def pterodactyl_manage_menu():
         if choice == "Установить Pterodactyl":
             pterodactyl_install_wizard()
         return
-    # ... здесь будет обычное меню управления, если установлен ...
-    # TODO: реализовать полноценное меню управления
+    while True:
+        clear_console()
+        console.print(Panel("[bold cyan]Управление Pterodactyl[/bold cyan]", title="Pterodactyl Panel", border_style="cyan"))
+        choices = [
+            "Открыть веб-панель",
+            "Artisan-команды",
+            "Статус/перезапуск pteroq (systemd)",
+            "Просмотр логов панели",
+            "Просмотр логов pteroq",
+            "Проверить версию панели",
+            "Удалить Pterodactyl",
+            "Назад"
+        ]
+        action = inquirer.select(message="Выберите действие:", choices=choices).execute()
+        if action == "Открыть веб-панель":
+            import webbrowser
+            url = inquirer.text(message="Введите URL панели (например, https://your-domain):", default="https://127.0.0.1").execute()
+            webbrowser.open(url)
+            console.print(f"[green]Открыто в браузере: {url}[/green]")
+            inquirer.text(message="Enter для возврата в меню...").execute()
+        elif action == "Artisan-команды":
+            artisan_choices = [
+                "php artisan p:environment:setup",
+                "php artisan p:environment:database",
+                "php artisan p:environment:mail",
+                "php artisan migrate --seed --force",
+                "php artisan cache:clear",
+                "php artisan config:clear",
+                "php artisan queue:restart",
+                "php artisan p:user:make",
+                "php artisan --version",
+                "Назад"
+            ]
+            artisan_cmd = inquirer.select(message="Выберите artisan-команду:", choices=artisan_choices).execute()
+            if artisan_cmd != "Назад":
+                res = run_command_with_dpkg_fix(f'cd /var/www/pterodactyl && {artisan_cmd}', spinner_message=f"{artisan_cmd} ...")
+                if res and res.returncode == 0:
+                    console.print(Panel(res.stdout or "[green]Команда выполнена успешно![/green]", title="Artisan output", border_style="green"))
+                else:
+                    console.print(Panel((res.stderr or res.stdout or "[red]Ошибка artisan[/red]"), title="Artisan error", border_style="red"))
+                inquirer.text(message="Enter для возврата в меню...").execute()
+        elif action == "Статус/перезапуск pteroq (systemd)":
+            sys_choices = [
+                "systemctl status pteroq.service",
+                "systemctl restart pteroq.service",
+                "systemctl stop pteroq.service",
+                "systemctl start pteroq.service",
+                "Назад"
+            ]
+            sys_cmd = inquirer.select(message="Выберите действие с pteroq:", choices=sys_choices).execute()
+            if sys_cmd != "Назад":
+                res = run_command_with_dpkg_fix(sys_cmd, spinner_message=f"{sys_cmd} ...")
+                if res and res.returncode == 0:
+                    console.print(Panel(res.stdout or "[green]Операция выполнена![/green]", title="systemd output", border_style="green"))
+                else:
+                    console.print(Panel((res.stderr or res.stdout or "[red]Ошибка systemd[/red]"), title="systemd error", border_style="red"))
+                inquirer.text(message="Enter для возврата в меню...").execute()
+        elif action == "Просмотр логов панели":
+            res = run_command_with_dpkg_fix('journalctl -u nginx -n 50 --no-pager', spinner_message="Логи nginx...")
+            res2 = run_command_with_dpkg_fix('tail -n 50 /var/www/pterodactyl/storage/logs/laravel.log', spinner_message="Логи laravel...")
+            console.print(Panel((res.stdout or "") + "\n" + (res2.stdout or ""), title="Последние логи панели", border_style="cyan"))
+            inquirer.text(message="Enter для возврата в меню...").execute()
+        elif action == "Просмотр логов pteroq":
+            res = run_command_with_dpkg_fix('journalctl -u pteroq.service -n 50 --no-pager', spinner_message="Логи pteroq...")
+            console.print(Panel(res.stdout or "[yellow]Лог пуст или недоступен[/yellow]", title="Логи pteroq", border_style="cyan"))
+            inquirer.text(message="Enter для возврата в меню...").execute()
+        elif action == "Проверить версию панели":
+            res = run_command_with_dpkg_fix('cd /var/www/pterodactyl && php artisan --version', spinner_message="Проверка версии...")
+            if res and res.returncode == 0:
+                console.print(Panel(res.stdout or "[green]Версия получена![/green]", title="Версия панели", border_style="green"))
+            else:
+                console.print(Panel((res.stderr or res.stdout or "[red]Ошибка версии[/red]"), title="Ошибка", border_style="red"))
+            inquirer.text(message="Enter для возврата в меню...").execute()
+        elif action == "Удалить Pterodactyl":
+            confirm = inquirer.confirm(message="Вы уверены, что хотите полностью удалить Pterodactyl?", default=False).execute()
+            if confirm:
+                pterodactyl_full_uninstall()
+                break
+        elif action == "Назад":
+            break
 
 def pterodactyl_install_wizard():
     import distro
@@ -127,7 +205,6 @@ def pterodactyl_install_wizard():
                     console.print(Panel(res.stdout, title=f"[yellow]apt-get stdout для {pkg}[/yellow]", border_style="yellow"))
             console.print("[bold]Возможные причины:[/bold] Нет интернета, проблемы с репозиториями, конфликт пакетов, недостаточно места, dpkg/apt заблокирован.")
             failed.append(pkg)
-        inquirer.text(message="Enter для продолжения...").execute()
     # Итоговая сводка
     summary = ""
     if installed:
@@ -162,9 +239,31 @@ def pterodactyl_install_wizard():
     console.print("[green]Файлы панели скачаны и распакованы![/green]")
     inquirer.text(message="Enter для продолжения...").execute()
 
-    # 10. Инструкция по созданию БД
-    console.print(Panel("[bold]Вам нужно создать базу данных и пользователя для Pterodactyl.[/bold]\n\nПример для MariaDB:\n\n[cyan]mariadb -u root -p[/cyan]\n\n[cyan]CREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY 'yourPassword';\nCREATE DATABASE panel;\nGRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;\nexit[/cyan]\n\n[bold yellow]Скопируйте команды выше и выполните их в отдельном терминале![/bold yellow]", title="Шаг 9: База данных", border_style="yellow"))
-    inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
+    # 10. Инструкция/автоматизация по созданию БД
+    console.print(Panel("[bold]Вам нужно создать базу данных и пользователя для Pterodactyl.[/bold]\n\nМожно сделать это автоматически или вручную.\n", title="Шаг 9: База данных", border_style="yellow"))
+    auto_db = inquirer.confirm(message="Создать базу данных и пользователя автоматически?", default=True).execute()
+    if auto_db:
+        import secrets
+        import string
+        db_user = "pterodactyl"
+        db_name = "panel"
+        db_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
+        console.print(f"[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}")
+        use_socket = inquirer.confirm(message="Пробовать подключение к MariaDB как root через unix_socket (без пароля)?", default=True).execute()
+        if use_socket:
+            cmd = f"mariadb -u root --execute=\"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;\""
+        else:
+            root_pass = inquirer.text(message="Введите пароль root MariaDB:").execute()
+            cmd = f"mariadb -u root -p{root_pass} --execute=\"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;\""
+        res = run_command_with_dpkg_fix(cmd, spinner_message="Создание БД и пользователя...")
+        if res and res.returncode == 0:
+            console.print(Panel(f"[green]База данных и пользователь успешно созданы![/green]\n\n[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}\n\n[bold yellow]Сохраните эти параметры![/bold yellow]", title="БД создана", border_style="green"))
+        else:
+            console.print(Panel(f"[red]Ошибка автоматического создания БД![/red]\n\nПопробуйте выполнить шаг вручную.\n\n[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[/cyan]\n\n[cyan]CREATE USER '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}';\nCREATE DATABASE {db_name};\nGRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;\nexit[/cyan]", title="Ошибка создания БД", border_style="red"))
+            inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
+    else:
+        console.print(Panel("[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[/cyan]\n\n[cyan]CREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY 'yourPassword';\nCREATE DATABASE panel;\nGRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;\nexit[/cyan]\n\n[bold yellow]Скопируйте команды выше и выполните их в отдельном терминале![/bold yellow]", title="Ручное создание БД", border_style="yellow"))
+        inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
 
     # 11. Установка зависимостей через composer
     console.print(Panel("Установка зависимостей через composer...", title="Шаг 10", border_style="yellow"))
@@ -178,6 +277,20 @@ def pterodactyl_install_wizard():
 
     # 12. Генерация ключа приложения
     console.print(Panel("Генерация ключа приложения...", title="Шаг 11", border_style="yellow"))
+    # Проверка и копирование .env
+    env_path = '/var/www/pterodactyl/.env'
+    env_example_path = '/var/www/pterodactyl/.env.example'
+    if not os.path.exists(env_path):
+        if os.path.exists(env_example_path):
+            res_cp = run_command_with_dpkg_fix(f'cp {env_example_path} {env_path}', spinner_message="Копирование .env.example -> .env ...")
+            if res_cp and res_cp.returncode != 0:
+                console.print(Panel(res_cp.stderr or res_cp.stdout or "Не удалось скопировать .env.example", title="[red]Ошибка копирования .env[/red]", border_style="red"))
+                inquirer.text(message="Нажмите Enter для выхода...").execute()
+                return
+        else:
+            console.print(Panel("[red].env.example не найден! Не могу создать .env[/red]", title="Ошибка .env", border_style="red"))
+            inquirer.text(message="Нажмите Enter для выхода...").execute()
+            return
     res = run_command_with_dpkg_fix('cd /var/www/pterodactyl && php artisan key:generate --force', spinner_message="artisan key:generate...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка artisan key:generate[/red]", border_style="red"))
