@@ -55,7 +55,7 @@ def pterodactyl_install_wizard():
     # 3. Добавление репозитория PHP (sury.org)
     console.print(Panel("Добавление репозитория PHP (sury.org)...", title="Шаг 2", border_style="yellow"))
     res = run_command('echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/sury-php.list', spinner_message="Добавление репозитория sury.org...")
-    res2 = run_command('curl -fsSL https://packages.sury.org/php/apt.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/sury-keyring.gpg', spinner_message="Импорт GPG ключа sury.org...")
+    res2 = run_command('curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --yes --dearmor -o /etc/apt/trusted.gpg.d/sury-keyring.gpg', spinner_message="Импорт GPG ключа sury.org...")
     if (res and res.returncode != 0) or (res2 and res2.returncode != 0):
         console.print(Panel((res.stderr or '') + '\n' + (res2.stderr or ''), title="[red]Ошибка добавления репозитория PHP[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
