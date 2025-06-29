@@ -636,7 +636,7 @@ def pterodactyl_install_wizard():
         ('php artisan p:environment:database', db_args, 'Database Settings'),
         ('php artisan p:environment:mail', mail_args, 'Mail Settings'),
     ]:
-        res = run_command_with_dpkg_fix(f"cd /var/www/pterodactyl && {cmd} {' '.join(args)}", spinner_message=title)
+        res = run_command_with_dpkg_fix(f"cd /var/www/pterodactyl && {cmd} {' '.join(args)} --no-interaction", spinner_message=title)
         if res and res.returncode == 0:
             console.print(Panel(res.stdout or f"[green]{title} выполнено![/green]", title=title, border_style="green"))
             # Явное подтверждение и короткая пауза
@@ -733,17 +733,25 @@ def pterodactyl_install_wizard():
         admin_email = defaults.get('author', f'admin@{domain}')
         console.print(Panel(f"[bold]Попытка автоматической установки SSL-сертификата Let's Encrypt для домена {domain}...[/bold]\n\nEmail для регистрации: {admin_email}", title="SSL для домена", border_style="yellow"))
         import shutil
-        if not shutil.which('certbot'):
-            console.print("[yellow]Certbot не найден, устанавливаю...[/yellow]")
-            run_command_with_dpkg_fix('apt update', spinner_message="apt update для certbot...")
-            run_command_with_dpkg_fix('apt install -y certbot python3-certbot-nginx', spinner_message="Установка certbot...")
+        import subprocess
+        # Проверка наличия certbot-nginx
+        def has_certbot_nginx():
+            try:
+                out = subprocess.check_output(['certbot', 'plugins'], encoding='utf-8')
+                return 'nginx' in out
+            except Exception:
+                return False
+        if not has_certbot_nginx():
+            console.print("[yellow]Устанавливается плагин certbot-nginx...[/yellow]")
+            run_command_with_dpkg_fix("apt-get update && apt-get install -y python3-certbot-nginx || apt-get install -y certbot-nginx", spinner_message="Установка certbot-nginx")
+        # Теперь certbot-nginx точно есть
         certbot_cmd = f"certbot --nginx --non-interactive --agree-tos -m {admin_email} -d {domain} --redirect"
-        res = run_command_with_dpkg_fix(certbot_cmd, spinner_message="Получение SSL-сертификата...")
+        res = run_command_with_dpkg_fix(certbot_cmd, spinner_message="Получение SSL-сертификата Let's Encrypt")
         if res and res.returncode == 0:
-            console.print(Panel(f"[green]Let's Encrypt SSL-сертификат успешно установлен для {domain}![/green]", title="SSL установлен", border_style="green"))
-            run_command_with_dpkg_fix('systemctl reload nginx', spinner_message="Перезапуск nginx...")
+            console.print(Panel(f"[green]SSL-сертификат успешно установлен![/green]\nПанель будет доступна по адресу: https://{domain}", title="Let's Encrypt SSL", border_style="green"))
+            run_command_with_dpkg_fix("systemctl restart nginx", spinner_message="Перезапуск nginx")
         else:
-            console.print(Panel(f"[red]Не удалось автоматически получить SSL-сертификат для {domain}![/red]\n\nПроверьте DNS, порт 80, и повторите попытку вручную:\n[cyan]{certbot_cmd}[/cyan]", title="Ошибка SSL", border_style="red"))
+            console.print(Panel(f"[red]Не удалось получить SSL-сертификат для {domain}![/red]\n\nПроверьте DNS, порт 80, nginx-конфиг и повторите попытку вручную:\n[bold]sudo certbot --nginx -d {domain} --non-interactive --agree-tos -m {admin_email} --redirect[/bold]", title="Ошибка Let's Encrypt", border_style="red"))
 
     # 18. Автоматизация крон и systemd unit для очереди
     # Крон
@@ -863,7 +871,7 @@ def pterodactyl_full_uninstall():
     run_command_with_dpkg_fix('systemctl disable pteroq.service', spinner_message="Отключение pteroq.service...")
     run_command_with_dpkg_fix('rm -f /etc/systemd/system/pteroq.service', spinner_message="Удаление systemd unit...")
     run_command_with_dpkg_fix('systemctl daemon-reload', spinner_message="Перезагрузка systemd...")
-    console.print("[green]systemd unit pteroq удалён![/green]")
+    console.print("[green]systemd unit pteroq удалён![...]")
     # 2. Удаление крон-задачи
     console.print(Panel("Удаление крон-задачи...", title="Шаг 2: Крон", border_style="yellow"))
     _remove_pterodactyl_cron()
@@ -871,12 +879,39 @@ def pterodactyl_full_uninstall():
     console.print(Panel("Удаление nginx-конфига...", title="Шаг 3", border_style="yellow"))
     run_command_with_dpkg_fix('rm -f /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf', spinner_message="Удаление nginx-конфига...")
     run_command_with_dpkg_fix('systemctl restart nginx', spinner_message="Перезапуск nginx...")
-    console.print("[green]nginx-конфиг удалён и nginx перезапущен![/green]")
-    # 4. Удаление файлов панели
+    console.print("[green]nginx-конфиг удалён и nginx перезапущен![...]")
+    # 4. Удаление SSL-сертификата Let's Encrypt
+    import shutil
+    import subprocess
+    domain = None
+    try:
+        # Попробовать найти домен из nginx-конфига
+        conf_path = "/etc/nginx/sites-available/pterodactyl.conf"
+        if os.path.exists(conf_path):
+            with open(conf_path, "r") as f:
+                import re
+                for line in f:
+                    m = re.search(r'server_name\s+([^;\s]+)', line)
+                    if m:
+                        domain = m.group(1)
+                        break
+    except Exception:
+        pass
+    if domain and shutil.which('certbot'):
+        console.print(Panel(f"Попытка удалить SSL-сертификат Let's Encrypt для домена: {domain}", title="Удаление SSL", border_style="yellow"))
+        try:
+            res = subprocess.run(["certbot", "delete", "--cert-name", domain, "--non-interactive"], capture_output=True, text=True)
+            if res.returncode == 0:
+                console.print(f"[green]SSL-сертификат для {domain} удалён![/green]")
+            else:
+                console.print(f"[yellow]Не удалось удалить сертификат автоматически. Проверьте вручную!\n{res.stderr or res.stdout}[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]Ошибка при удалении сертификата: {e}[/yellow]")
+    # 5. Удаление файлов панели
     console.print(Panel("Удаление файлов панели...", title="Шаг 4", border_style="yellow"))
     run_command_with_dpkg_fix('rm -rf /var/www/pterodactyl', spinner_message="Удаление /var/www/pterodactyl...")
     console.print("[green]Файлы панели удалены![/green]")
-    # 5. Удаление базы данных
+    # 6. Удаление базы данных
     console.print(Panel("Удаление базы данных и пользователя...", title="Шаг 5: База данных", border_style="yellow"))
     _remove_pterodactyl_db()
     # Финальное подтверждение
