@@ -188,7 +188,6 @@ echo "---------------"
         "service_name": "pterodactyl-panel",
         "version_cmd": "cd /var/www/pterodactyl && php artisan --version",
         "is_installed_check": lambda: os.path.exists('/var/www/pterodactyl'),
-        "install_cmd": "echo 'Pterodactyl будет установлен по официальной инструкции. Требуется: nginx, MySQL/MariaDB, PHP 8.1+, composer, nodejs, yarn.\nСм. https://pterodactyl.io/panel/1.11/getting_started.html#installing-composer",
         "uninstall_cmd": "rm -rf /var/www/pterodactyl /etc/systemd/system/pterodactyl* && systemctl daemon-reload",
         "service_status_cmd": "systemctl status pterodactyl-panel",
         "service_start_cmd": "systemctl start pterodactyl-panel",
