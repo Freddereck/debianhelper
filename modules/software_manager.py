@@ -11,11 +11,17 @@ from InquirerPy.separator import Separator
 from InquirerPy.utils import get_style
 from prompt_toolkit.formatted_text import ANSI
 import tempfile
+import configparser
+import getpass
+import webbrowser
+import socket
 
 from localization import get_string
 from modules.panel_utils import clear_console, run_command, is_root
 
 console = Console()
+
+JAVA_PATH_CONFIG = os.path.expanduser('~/.linux_helper_java_path')
 
 def strip_rich_markup(text):
     """Removes rich markup tags from a string."""
@@ -157,7 +163,7 @@ echo "---------------"
         "display_name": get_string("java_display_name"),
         "package_name": "openjdk-17-jdk",
         "version_cmd": "java -version",
-        "is_installed_check": lambda: shutil.which('java') is not None,
+        "is_installed_check": lambda: shutil.which('java') is not None or (os.path.exists(JAVA_PATH_CONFIG) and os.access(open(JAVA_PATH_CONFIG).read().strip(), os.X_OK)),
     },
     "wg-dashboard": {
         "display_name": "WireGuard Dashboard",
@@ -165,6 +171,42 @@ echo "---------------"
         "service_name": "",
         "version_cmd": "",
         "is_installed_check": lambda: False,  # Заглушка, всегда не установлен
+    },
+    "webmin": {
+        "display_name": "Webmin (веб-панель управления сервером)",
+        "package_name": "webmin",
+        "service_name": "webmin",
+        "version_cmd": "/usr/share/webmin/miniserv.pl --version || webmin --version",
+        "is_installed_check": lambda: os.path.exists('/etc/webmin'),
+        "install_cmd": "wget -qO- http://www.webmin.com/jcameron-key.asc | apt-key add - && echo 'deb http://download.webmin.com/download/repository sarge contrib' > /etc/apt/sources.list.d/webmin.list && apt-get update && apt-get install -y webmin",
+        "uninstall_cmd": "apt-get purge -y webmin && rm -rf /etc/webmin /var/webmin",
+        "show_output_on_success": True
+    },
+    "pterodactyl": {
+        "display_name": "Pterodactyl (панель для игровых серверов)",
+        "package_name": "pterodactyl-panel",
+        "service_name": "pterodactyl-panel",
+        "version_cmd": "cd /var/www/pterodactyl && php artisan --version",
+        "is_installed_check": lambda: os.path.exists('/var/www/pterodactyl'),
+        "install_cmd": "echo 'Pterodactyl будет установлен по официальной инструкции. Требуется: nginx, MySQL/MariaDB, PHP 8.1+, composer, nodejs, yarn.\nСм. https://pterodactyl.io/panel/1.11/getting_started.html' && sleep 2 && bash <(curl -s https://raw.githubusercontent.com/pterodactyl/installer/main/install.sh)",
+        "uninstall_cmd": "rm -rf /var/www/pterodactyl /etc/systemd/system/pterodactyl* && systemctl daemon-reload",
+        "service_status_cmd": "systemctl status pterodactyl-panel",
+        "service_start_cmd": "systemctl start pterodactyl-panel",
+        "service_stop_cmd": "systemctl stop pterodactyl-panel",
+        "service_restart_cmd": "systemctl restart pterodactyl-panel",
+    },
+    "wings": {
+        "display_name": "Wings (Pterodactyl Node)",
+        "package_name": "wings",
+        "service_name": "wings",
+        "version_cmd": "/usr/local/bin/wings --version",
+        "is_installed_check": lambda: shutil.which('wings') is not None or os.path.exists('/usr/local/bin/wings'),
+        "install_cmd": "bash <(curl -s https://pterodactyl.io/install/standalone.sh)",
+        "uninstall_cmd": "systemctl stop wings && systemctl disable wings && rm -f /etc/systemd/system/wings.service /usr/local/bin/wings && systemctl daemon-reload",
+        "service_status_cmd": "systemctl status wings",
+        "service_start_cmd": "systemctl start wings",
+        "service_stop_cmd": "systemctl stop wings",
+        "service_restart_cmd": "systemctl restart wings",
     },
 }
 
@@ -241,6 +283,20 @@ def _handle_install(key):
                     console.print(f"[yellow]Установка {data['display_name']} отменена из-за отсутствия зависимости.[/yellow]")
                     inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
                     return
+
+    # --- Описание Webmin перед установкой ---
+    if key == "webmin":
+        console.print(Panel(
+            "[bold cyan]Webmin[/bold cyan] — это мощная и гибкая веб-панель для администрирования Linux-серверов через браузер.\n\n"
+            "• Позволяет управлять пользователями, сервисами, сетевыми настройками, брандмауэром, пакетами, cron, логами и многим другим.\n"
+            "• Поддерживает плагины, SSL, управление несколькими серверами.\n"
+            "• Интерфейс доступен по адресу: https://<IP>:10000 (после установки).\n\n"
+            "[yellow]Внимание:[/yellow] Webmin открывает доступ к управлению сервером через веб. Не забудьте настроить безопасный пароль и firewall!\n\n"
+            "Подробнее: [link=https://www.webmin.com/]https://www.webmin.com/[/link]",
+            title="О Webmin",
+            border_style="blue"
+        ))
+        inquirer.text(message="Нажмите Enter для продолжения...").execute()
 
     # --- Custom Install Command ---
     if "install_cmd" in data:
@@ -387,6 +443,11 @@ def _handle_install(key):
     
     inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
 
+    if key == 'pterodactyl':
+        console.print(Panel(get_string('pterodactyl_description'), title='Pterodactyl', border_style='blue'))
+        confirm = inquirer.confirm(message=get_string('uninstall_confirm', package='Pterodactyl')).execute()
+        if not confirm:
+            return
 
 def _handle_uninstall(key):
     data = SUPPORTED_SOFTWARE[key]
@@ -626,6 +687,7 @@ def _show_service_menu(key):
                 Choice("stop", name=get_string("service_stop")),
                 Choice("restart", name=get_string("service_restart")),
                 Choice("status", name=get_string("service_status")),
+                Choice("webmin_settings", name=get_string("webmin_settings_menu")),
                 Choice(None, name=get_string("action_back"))
             ]
 
@@ -642,6 +704,8 @@ def _show_service_menu(key):
                 clear_console()
                 console.print(Panel(full_status_output, title=f"Status for {service_name}"))
                 inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
+            elif op == 'webmin_settings':
+                webmin_settings_menu()
             else:
                 cmd = []
                 if manager == 'systemctl':
@@ -890,3 +954,227 @@ def run_software_manager():
             console.print(traceback.format_exc())
             inquirer.text(message="Press enter to exit manager").execute()
             break 
+
+def webmin_settings_menu():
+    conf_path = '/etc/webmin/miniserv.conf'
+    def read_settings():
+        settings = {'port': '10000', 'ssl': '1'}
+        try:
+            with open(conf_path, 'r') as f:
+                for line in f:
+                    if line.startswith('port='):
+                        settings['port'] = line.strip().split('=',1)[1]
+                    if line.startswith('ssl='):
+                        settings['ssl'] = line.strip().split('=',1)[1]
+        except Exception:
+            pass
+        return settings
+    def write_setting(key, value):
+        lines = []
+        try:
+            with open(conf_path, 'r') as f:
+                lines = f.readlines()
+            found = False
+            for i, line in enumerate(lines):
+                if line.startswith(f'{key}='):
+                    lines[i] = f'{key}={value}\n'
+                    found = True
+            if not found:
+                lines.append(f'{key}={value}\n')
+            with open(conf_path, 'w') as f:
+                f.writelines(lines)
+        except Exception as e:
+            return str(e)
+        return None
+    def restart_webmin():
+        run_command(['systemctl', 'restart', 'webmin'], get_string('service_restart'))
+    while True:
+        settings = read_settings()
+        ssl_status = get_string('webmin_ssl_on') if settings['ssl'] == '1' else get_string('webmin_ssl_off')
+        port = settings['port']
+        choice = inquirer.select(
+            message=get_string('webmin_settings_menu'),
+            choices=[
+                get_string('webmin_show_settings').format(port=port, ssl=ssl_status),
+                get_string('webmin_change_port'),
+                get_string('webmin_toggle_ssl'),
+                get_string('webmin_change_pass'),
+                get_string('webmin_autostart'),
+                get_string('webmin_settings_back'),
+            ]).execute()
+        if choice == get_string('webmin_show_settings').format(port=port, ssl=ssl_status):
+            console.print(Panel(f"{get_string('webmin_current_port').format(port=port)}\n{get_string('webmin_current_ssl').format(ssl=ssl_status)}", title=get_string('webmin_settings_menu')))
+            inquirer.text(message=get_string('press_enter_to_continue')).execute()
+        elif choice == get_string('webmin_change_port'):
+            new_port = inquirer.text(message=get_string('webmin_enter_new_port')).execute()
+            if re.match(r'^\d{2,5}$', new_port):
+                err = write_setting('port', new_port)
+                if not err:
+                    console.print(get_string('webmin_port_changed').format(port=new_port))
+                    restart_webmin()
+                else:
+                    console.print(f"[red]{err}[/red]")
+            else:
+                console.print("[red]Некорректный порт[/red]")
+        elif choice == get_string('webmin_toggle_ssl'):
+            new_ssl = '0' if settings['ssl'] == '1' else '1'
+            err = write_setting('ssl', new_ssl)
+            if not err:
+                if new_ssl == '1':
+                    console.print(get_string('webmin_ssl_enabled'))
+                else:
+                    console.print(get_string('webmin_ssl_disabled'))
+                restart_webmin()
+            else:
+                console.print(f"[red]{err}[/red]")
+        elif choice == get_string('webmin_change_pass'):
+            new_pass = getpass.getpass(get_string('webmin_change_pass')+': ')
+            if new_pass:
+                res = run_command(['/usr/share/webmin/changepass.pl', '/etc/webmin', 'root', new_pass], get_string('webmin_change_pass'))
+                if res and res.returncode == 0:
+                    console.print(get_string('webmin_pass_changed'))
+                else:
+                    console.print("[red]Ошибка смены пароля[/red]")
+        elif choice == get_string('webmin_autostart'):
+            res = run_command(['systemctl', 'enable', 'webmin'], get_string('webmin_autostart'))
+            if res and res.returncode == 0:
+                console.print(get_string('webmin_autostart_on'))
+            else:
+                res2 = run_command(['systemctl', 'disable', 'webmin'], get_string('webmin_autostart'))
+                if res2 and res2.returncode == 0:
+                    console.print(get_string('webmin_autostart_off'))
+        elif choice == get_string('webmin_settings_back'):
+            break 
+
+def pterodactyl_manage_menu():
+    def get_panel_url():
+        # По умолчанию http://<ip>/ или http://localhost/
+        try:
+            hostname = socket.gethostname()
+            ip = socket.gethostbyname(hostname)
+            return f"http://{ip}/"
+        except:
+            return "http://localhost/"
+    while True:
+        choice = inquirer.select(
+            message=get_string('pterodactyl_manage_menu'),
+            choices=[
+                get_string('service_status'),
+                get_string('service_start'),
+                get_string('service_stop'),
+                get_string('service_restart'),
+                get_string('pterodactyl_open_panel'),
+                get_string('pterodactyl_add_server'),
+                get_string('action_back'),
+            ]).execute()
+        if choice == get_string('service_status'):
+            res = run_command(['systemctl', 'status', 'pterodactyl-panel'], get_string('service_status'))
+            if res:
+                console.print(Panel(res.stdout or res.stderr, title=get_string('service_status')))
+            inquirer.text(message=get_string('press_enter_to_continue')).execute()
+        elif choice == get_string('service_start'):
+            run_command(['systemctl', 'start', 'pterodactyl-panel'], get_string('service_start'))
+        elif choice == get_string('service_stop'):
+            run_command(['systemctl', 'stop', 'pterodactyl-panel'], get_string('service_stop'))
+        elif choice == get_string('service_restart'):
+            run_command(['systemctl', 'restart', 'pterodactyl-panel'], get_string('service_restart'))
+        elif choice == get_string('pterodactyl_open_panel'):
+            url = get_panel_url()
+            console.print(f"[green]Открываю панель: {url}[/green]")
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
+            inquirer.text(message=get_string('press_enter_to_continue')).execute()
+        elif choice == get_string('pterodactyl_add_server'):
+            console.print("[yellow]Добавление сервера реализуется через веб-интерфейс панели Pterodactyl![/yellow]")
+            inquirer.text(message=get_string('press_enter_to_continue')).execute()
+        elif choice == get_string('action_back'):
+            break 
+
+def wings_manage_menu():
+    from rich.panel import Panel
+    from InquirerPy import inquirer
+    import webbrowser
+    while True:
+        choice = inquirer.select(
+            message=get_string('wings_manage_menu'),
+            choices=[
+                get_string('wings_status'),
+                get_string('wings_start'),
+                get_string('wings_stop'),
+                get_string('wings_restart'),
+                get_string('wings_open_docs'),
+                get_string('wings_remove'),
+                get_string('action_back'),
+            ]).execute()
+        if choice == get_string('wings_status'):
+            res = run_command(['systemctl', 'status', 'wings'], get_string('wings_status'))
+            if res:
+                console.print(Panel(res.stdout or res.stderr, title=get_string('wings_status')))
+            inquirer.text(message=get_string('press_enter_to_continue')).execute()
+        elif choice == get_string('wings_start'):
+            run_command(['systemctl', 'start', 'wings'], get_string('wings_start'))
+        elif choice == get_string('wings_stop'):
+            run_command(['systemctl', 'stop', 'wings'], get_string('wings_stop'))
+        elif choice == get_string('wings_restart'):
+            run_command(['systemctl', 'restart', 'wings'], get_string('wings_restart'))
+        elif choice == get_string('wings_open_docs'):
+            webbrowser.open('https://pterodactyl.io/wings/1.11/installing.html')
+            console.print(get_string('wings_connect_guide'))
+            inquirer.text(message=get_string('press_enter_to_continue')).execute()
+        elif choice == get_string('wings_remove'):
+            confirm = inquirer.confirm(message=get_string('uninstall_confirm', package='Wings')).execute()
+            if confirm:
+                run_command(['systemctl', 'stop', 'wings'], get_string('wings_stop'))
+                run_command(['systemctl', 'disable', 'wings'], get_string('wings_stop'))
+                run_command(['rm', '-f', '/etc/systemd/system/wings.service', '/usr/local/bin/wings'], 'Удаление файлов Wings...')
+                run_command(['systemctl', 'daemon-reload'], 'Перезагрузка systemd...')
+                console.print(get_string('uninstall_success', package='Wings'))
+                inquirer.text(message=get_string('press_enter_to_continue')).execute()
+                break
+        elif choice == get_string('action_back'):
+            break
+
+def java_diagnostics():
+    from rich.panel import Panel
+    paths_checked = []
+    found_path = None
+    # 1. Проверка через which
+    java_path = shutil.which('java')
+    if java_path:
+        console.print(Panel(get_string('java_found_in_path').format(path=java_path), title=get_string('java_diagnostics_title'), border_style='green'))
+        found_path = java_path
+    else:
+        # 2. Проверка стандартных путей
+        std_paths = ['/usr/bin/java', '/usr/local/bin/java', '/usr/lib/jvm/java-17-openjdk-amd64/bin/java']
+        for p in std_paths:
+            paths_checked.append(p)
+            if os.path.exists(p) and os.access(p, os.X_OK):
+                console.print(Panel(get_string('java_found_in_std').format(path=p), title=get_string('java_diagnostics_title'), border_style='green'))
+                found_path = p
+                break
+    if not found_path:
+        console.print(Panel(get_string('java_not_in_path'), title=get_string('java_diagnostics_title'), border_style='red'))
+        manual = inquirer.confirm(message='Указать путь к java вручную?', default=False).execute()
+        if manual:
+            user_path = inquirer.text(message=get_string('java_manual_path_prompt')).execute()
+            if os.path.exists(user_path) and os.access(user_path, os.X_OK):
+                # Проверим запуск
+                try:
+                    res = subprocess.run([user_path, '-version'], capture_output=True, text=True)
+                    if res.returncode == 0:
+                        with open(JAVA_PATH_CONFIG, 'w') as f:
+                            f.write(user_path.strip())
+                        console.print(get_string('java_manual_path_success').format(path=user_path))
+                        found_path = user_path
+                    else:
+                        console.print(get_string('java_manual_path_fail'))
+                except Exception:
+                    console.print(get_string('java_manual_path_fail'))
+            else:
+                console.print(get_string('java_manual_path_fail'))
+    if found_path:
+        with open(JAVA_PATH_CONFIG, 'w') as f:
+            f.write(found_path.strip())
+    inquirer.text(message=get_string('press_enter_to_continue')).execute() 

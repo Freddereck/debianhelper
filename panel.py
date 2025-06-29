@@ -221,6 +221,13 @@ def update_self():
                 else:
                     console.print(Panel("[red]pip не найден. Установите pip вручную![/red]", title="[red]Ошибка[/red]", border_style="red"))
             console.print(Panel("Рекомендуется перезапустить панель для применения обновлений!", title="[yellow]Требуется перезапуск[/yellow]", border_style="yellow"))
+            restart = inquirer.confirm(message="Перезапустить панель сейчас?", default=True).execute()
+            if restart:
+                console.print("[yellow]Перезапуск панели...[/yellow]")
+                import os, sys
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+            else:
+                inquirer.text(message=get_string("press_enter_to_continue")).execute()
         else:
             console.print(Panel(pull.stderr or pull.stdout, title="[red]Ошибка git pull[/red]", border_style="red"))
         inquirer.text(message=get_string("press_enter_to_continue")).execute()
