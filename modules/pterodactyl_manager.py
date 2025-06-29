@@ -591,6 +591,38 @@ def pterodactyl_install_wizard():
         defaults['mail_user'] = inquirer.text(message="SMTP user:", default=defaults['mail_user']).execute()
         defaults['mail_pass'] = inquirer.text(message="SMTP password:", default=defaults['mail_pass']).execute()
         defaults['mail_encryption'] = inquirer.select(message="SMTP encryption:", choices=['tls','ssl',''], default=defaults['mail_encryption']).execute()
+    # --- Проверка валидности таймзоны перед формированием setup_args ---
+    valid_timezones = [
+        'UTC', 'Europe/Moscow', 'Asia/Novosibirsk', 'Asia/Krasnoyarsk', 'Asia/Yekaterinburg',
+        'Europe/Samara', 'Europe/Kaliningrad', 'Asia/Vladivostok', 'Asia/Irkutsk', 'Asia/Omsk',
+        'Asia/Barnaul', 'Asia/Tomsk', 'Asia/Chita', 'Asia/Sakhalin', 'Asia/Magadan', 'Asia/Kamchatka',
+        'Asia/Srednekolymsk', 'Asia/Ust-Nera', 'Asia/Anadyr', 'Asia/Yakutsk', 'Asia/Krasnoyarsk',
+        'Asia/Novokuznetsk', 'Asia/Khandyga', 'Asia/Chita', 'Asia/Irkutsk', 'Asia/Ulaanbaatar',
+        'Asia/Hong_Kong', 'Asia/Bangkok', 'Asia/Singapore', 'Asia/Shanghai', 'Asia/Tokyo',
+        'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Europe/Rome', 'Europe/Madrid',
+        'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+        'Etc/GMT-3', 'Etc/GMT-4', 'Etc/GMT-5', 'Etc/GMT-6', 'Etc/GMT-7', 'Etc/GMT-8', 'Etc/GMT-9',
+    ]
+    def is_valid_timezone(tz):
+        if not tz:
+            return False
+        if tz in valid_timezones:
+            return True
+        import re
+        if re.match(r'^Etc/GMT[+-]\d+$', tz):
+            return True
+        if re.match(r'^[A-Za-z]+/[A-Za-z_\-]+$', tz):
+            return True
+        return False
+    while not is_valid_timezone(defaults['timezone']):
+        console.print(Panel(f"[yellow]Внимание: выбрана невалидная таймзона: {defaults['timezone']}\nРекомендуется выбрать корректную таймзону из списка PHP: https://www.php.net/manual/en/timezones.php[/yellow]", title="APP_TIMEZONE невалидна", border_style="yellow"))
+        tz_choice = inquirer.select(
+            message="Выберите корректную таймзону для панели:",
+            choices=valid_timezones + ["Ввести вручную"]
+        ).execute()
+        if tz_choice == "Ввести вручную":
+            tz_choice = inquirer.text(message="Введите корректную таймзону (например, Europe/Moscow):").execute()
+        defaults['timezone'] = tz_choice
     # Формируем параметры для artisan
     setup_args = [
         f"--author={defaults['author']}",
