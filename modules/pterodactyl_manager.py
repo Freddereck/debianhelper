@@ -605,12 +605,33 @@ def pterodactyl_install_wizard():
         f"--settings-ui={'true' if defaults['settings_ui'] in (True,'true') else 'false'}",
         f"--telemetry={'true' if defaults['telemetry'] in (True,'true') else 'false'}",
     ]
+    # --- Исправление: не запускать artisan с пустым паролем ---
+    if not defaults['db_pass']:
+        console.print("[red]Пароль для БД не может быть пустым! Введите пароль для пользователя БД.[/red]")
+        while not defaults['db_pass']:
+            db_pass_input = inquirer.text(message=f"DB password (Enter для автозаполнения):", default="").execute()
+            if db_pass_input:
+                defaults['db_pass'] = db_pass_input
+            else:
+                console.print("[red]Пароль не может быть пустым![/red]")
+        # После ввода — обновить .env
+        env_path = '/var/www/pterodactyl/.env'
+        if os.path.exists(env_path):
+            lines = []
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith('DB_PASSWORD='):
+                        lines.append(f'DB_PASSWORD={defaults["db_pass"]}\n')
+                    else:
+                        lines.append(line)
+            with open(env_path, 'w') as f:
+                f.writelines(lines)
     db_args = [
         f"--host={defaults['db_host']}",
         f"--port={defaults['db_port']}",
         f"--database={defaults['db_name']}",
         f"--username={defaults['db_user']}",
-        f"--password=\"{defaults['db_pass']}\"" if defaults['db_pass'] else '--password=""',
+        f"--password={defaults['db_pass']}"
     ]
     mail_args = [
         f"--driver={defaults['mail_driver']}",
@@ -704,6 +725,16 @@ def pterodactyl_install_wizard():
     admin_email = f"admin@{domain if 'domain' in locals() else 'localhost'}"
     admin_name = "admin"
     admin_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+    # Проверка валидности email и username
+    import re
+    def is_valid_email(email):
+        return re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email)
+    def is_valid_username(username):
+        return re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]$", username)
+    while not is_valid_email(admin_email):
+        admin_email = inquirer.text(message="Введите валидный email для администратора:", default=admin_email).execute()
+    while not is_valid_username(admin_name):
+        admin_name = inquirer.text(message="Введите username (латиница, цифры, -, _, .):", default=admin_name).execute()
     user_cmd = (
         f"cd /var/www/pterodactyl && php artisan p:user:make "
         f"--email={admin_email} --username={admin_name} --name-first={admin_name} "
@@ -713,7 +744,7 @@ def pterodactyl_install_wizard():
     if res and res.returncode == 0 and ('User Created' in (res.stdout or '') or 'UUID' in (res.stdout or '')):
         console.print(Panel(f"[green]Администратор создан автоматически![/green]\n\n[cyan]Email:[/cyan] {admin_email}\n[cyan]Имя:[/cyan] {admin_name}\n[cyan]Пароль:[/cyan] {admin_pass}", title="Админ создан", border_style="green"))
     else:
-        console.print(Panel("[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make --email=... --username=... --name-first=... --name-last=... --password=... --admin=1[cyan]", title="Ручное создание админа", border_style="yellow"))
+        console.print(Panel(f"[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make --email={admin_email} --username={admin_name} --name-first={admin_name} --name-last={admin_name} --password={admin_pass} --admin=1[cyan]", title="Ручное создание админа", border_style="yellow"))
         inquirer.text(message="Нажмите Enter, когда пользователь будет создан...").execute()
 
     # 16. Права на папку
