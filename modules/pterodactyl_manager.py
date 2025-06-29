@@ -44,7 +44,7 @@ def pterodactyl_install_wizard():
 
     # 2. Установка базовых пакетов
     console.print(Panel("Установка базовых пакетов (curl, ca-certificates, gnupg2, sudo, lsb-release)...", title="Шаг 1", border_style="yellow"))
-    res = run_command("apt -y install software-properties-common curl ca-certificates gnupg2 sudo lsb-release", spinner_message="Установка базовых пакетов...")
+    res = run_command_with_dpkg_fix("apt -y install software-properties-common curl ca-certificates gnupg2 sudo lsb-release", spinner_message="Установка базовых пакетов...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка установки базовых пакетов[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -54,8 +54,8 @@ def pterodactyl_install_wizard():
 
     # 3. Добавление репозитория PHP (sury.org)
     console.print(Panel("Добавление репозитория PHP (sury.org)...", title="Шаг 2", border_style="yellow"))
-    res = run_command('echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/sury-php.list', spinner_message="Добавление репозитория sury.org...")
-    res2 = run_command('curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --yes --dearmor -o /etc/apt/trusted.gpg.d/sury-keyring.gpg', spinner_message="Импорт GPG ключа sury.org...")
+    res = run_command_with_dpkg_fix('echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/sury-php.list', spinner_message="Добавление репозитория sury.org...")
+    res2 = run_command_with_dpkg_fix('curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --yes --dearmor -o /etc/apt/trusted.gpg.d/sury-keyring.gpg', spinner_message="Импорт GPG ключа sury.org...")
     if (res and res.returncode != 0) or (res2 and res2.returncode != 0):
         console.print(Panel((res.stderr or '') + '\n' + (res2.stderr or ''), title="[red]Ошибка добавления репозитория PHP[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -65,8 +65,8 @@ def pterodactyl_install_wizard():
 
     # 4. Добавление репозитория Redis
     console.print(Panel("Добавление репозитория Redis...", title="Шаг 3", border_style="yellow"))
-    res = run_command('curl -fsSL https://packages.redis.io/gpg | gpg --yes --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg', spinner_message="Импорт GPG ключа Redis...")
-    res2 = run_command('echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list', spinner_message="Добавление репозитория Redis...")
+    res = run_command_with_dpkg_fix('curl -fsSL https://packages.redis.io/gpg | gpg --yes --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg', spinner_message="Импорт GPG ключа Redis...")
+    res2 = run_command_with_dpkg_fix('echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list', spinner_message="Добавление репозитория Redis...")
     if (res and res.returncode != 0) or (res2 and res2.returncode != 0):
         console.print(Panel((res.stderr or '') + '\n' + (res2.stderr or ''), title="[red]Ошибка добавления репозитория Redis[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -76,7 +76,7 @@ def pterodactyl_install_wizard():
 
     # 5. MariaDB repo setup
     console.print(Panel("Добавление репозитория MariaDB...", title="Шаг 4", border_style="yellow"))
-    res = run_command('curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash', spinner_message="MariaDB repo setup...")
+    res = run_command_with_dpkg_fix('curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash', spinner_message="MariaDB repo setup...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка MariaDB repo setup[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -86,7 +86,7 @@ def pterodactyl_install_wizard():
 
     # 6. apt update
     console.print(Panel("Обновление списка пакетов...", title="Шаг 5", border_style="yellow"))
-    res = run_command('apt update', spinner_message="apt update...")
+    res = run_command_with_dpkg_fix('apt update', spinner_message="apt update...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка apt update[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -109,12 +109,12 @@ def pterodactyl_install_wizard():
     for pkg in dependencies_list:
         console.print(f"[cyan]Устанавливается: {pkg} ...[/cyan]")
         # Проверка, установлен ли уже
-        check = run_command(f"dpkg -s {pkg}", spinner_message=f"Проверка {pkg}...")
+        check = run_command_with_dpkg_fix(f"dpkg -s {pkg}", spinner_message=f"Проверка {pkg}...")
         if check and check.returncode == 0:
             console.print(f"[yellow]{pkg} уже установлен.[/yellow]")
             already.append(pkg)
             continue
-        res = run_command(f"apt install -y {pkg}", spinner_message=f"Установка {pkg}...")
+        res = run_command_with_dpkg_fix(f"apt install -y {pkg}", spinner_message=f"Установка {pkg}...")
         if res and res.returncode == 0:
             console.print(f"[green]{pkg} успешно установлен![/green]")
             installed.append(pkg)
@@ -145,7 +145,7 @@ def pterodactyl_install_wizard():
 
     # 8. Установка Composer
     console.print(Panel("Установка Composer...", title="Шаг 7", border_style="yellow"))
-    res = run_command('curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer', spinner_message="Установка Composer...")
+    res = run_command_with_dpkg_fix('curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer', spinner_message="Установка Composer...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка установки Composer[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -155,10 +155,10 @@ def pterodactyl_install_wizard():
 
     # 9. Скачивание и распаковка панели
     console.print(Panel("Скачивание и распаковка Pterodactyl Panel...", title="Шаг 8", border_style="yellow"))
-    run_command('mkdir -p /var/www/pterodactyl', spinner_message="Создание директории...")
-    run_command('cd /var/www/pterodactyl && curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz', spinner_message="Скачивание архива панели...")
-    run_command('cd /var/www/pterodactyl && tar -xzvf panel.tar.gz', spinner_message="Распаковка архива...")
-    run_command('cd /var/www/pterodactyl && chmod -R 755 storage/* bootstrap/cache/', spinner_message="Права на storage и cache...")
+    run_command_with_dpkg_fix('mkdir -p /var/www/pterodactyl', spinner_message="Создание директории...")
+    run_command_with_dpkg_fix('cd /var/www/pterodactyl && curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz', spinner_message="Скачивание архива панели...")
+    run_command_with_dpkg_fix('cd /var/www/pterodactyl && tar -xzvf panel.tar.gz', spinner_message="Распаковка архива...")
+    run_command_with_dpkg_fix('cd /var/www/pterodactyl && chmod -R 755 storage/* bootstrap/cache/', spinner_message="Права на storage и cache...")
     console.print("[green]Файлы панели скачаны и распакованы![/green]")
     inquirer.text(message="Enter для продолжения...").execute()
 
@@ -168,7 +168,7 @@ def pterodactyl_install_wizard():
 
     # 11. Установка зависимостей через composer
     console.print(Panel("Установка зависимостей через composer...", title="Шаг 10", border_style="yellow"))
-    res = run_command('cd /var/www/pterodactyl && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader', spinner_message="composer install...")
+    res = run_command_with_dpkg_fix('cd /var/www/pterodactyl && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader', spinner_message="composer install...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка composer install[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -178,7 +178,7 @@ def pterodactyl_install_wizard():
 
     # 12. Генерация ключа приложения
     console.print(Panel("Генерация ключа приложения...", title="Шаг 11", border_style="yellow"))
-    res = run_command('cd /var/www/pterodactyl && php artisan key:generate --force', spinner_message="artisan key:generate...")
+    res = run_command_with_dpkg_fix('cd /var/www/pterodactyl && php artisan key:generate --force', spinner_message="artisan key:generate...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка artisan key:generate[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -192,7 +192,7 @@ def pterodactyl_install_wizard():
 
     # 14. Миграция и seed базы
     console.print(Panel("Миграция и seed базы...", title="Шаг 13", border_style="yellow"))
-    res = run_command('cd /var/www/pterodactyl && php artisan migrate --seed --force', spinner_message="artisan migrate --seed...")
+    res = run_command_with_dpkg_fix('cd /var/www/pterodactyl && php artisan migrate --seed --force', spinner_message="artisan migrate --seed...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка artisan migrate --seed[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -206,7 +206,7 @@ def pterodactyl_install_wizard():
 
     # 16. Права на папку
     console.print(Panel("Установка прав на папку для www-data...", title="Шаг 15", border_style="yellow"))
-    res = run_command('chown -R www-data:www-data /var/www/pterodactyl/*', spinner_message="chown www-data...")
+    res = run_command_with_dpkg_fix('chown -R www-data:www-data /var/www/pterodactyl/*', spinner_message="chown www-data...")
     if res and res.returncode != 0:
         console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка chown[/red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
@@ -266,10 +266,10 @@ def pterodactyl_full_uninstall():
 
     # 1. Остановка и отключение systemd unit pteroq
     console.print(Panel("Остановка и отключение systemd unit pteroq...", title="Шаг 1", border_style="yellow"))
-    run_command('systemctl stop pteroq.service', spinner_message="Остановка pteroq.service...")
-    run_command('systemctl disable pteroq.service', spinner_message="Отключение pteroq.service...")
-    run_command('rm -f /etc/systemd/system/pteroq.service', spinner_message="Удаление systemd unit...")
-    run_command('systemctl daemon-reload', spinner_message="Перезагрузка systemd...")
+    run_command_with_dpkg_fix('systemctl stop pteroq.service', spinner_message="Остановка pteroq.service...")
+    run_command_with_dpkg_fix('systemctl disable pteroq.service', spinner_message="Отключение pteroq.service...")
+    run_command_with_dpkg_fix('rm -f /etc/systemd/system/pteroq.service', spinner_message="Удаление systemd unit...")
+    run_command_with_dpkg_fix('systemctl daemon-reload', spinner_message="Перезагрузка systemd...")
     console.print("[green]systemd unit pteroq удалён![/green]")
     inquirer.text(message="Enter для продолжения...").execute()
 
@@ -279,14 +279,14 @@ def pterodactyl_full_uninstall():
 
     # 3. Удаление nginx-конфига
     console.print(Panel("Удаление nginx-конфига...", title="Шаг 3", border_style="yellow"))
-    run_command('rm -f /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf', spinner_message="Удаление nginx-конфига...")
-    run_command('systemctl restart nginx', spinner_message="Перезапуск nginx...")
+    run_command_with_dpkg_fix('rm -f /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf', spinner_message="Удаление nginx-конфига...")
+    run_command_with_dpkg_fix('systemctl restart nginx', spinner_message="Перезапуск nginx...")
     console.print("[green]nginx-конфиг удалён и nginx перезапущен![/green]")
     inquirer.text(message="Enter для продолжения...").execute()
 
     # 4. Удаление файлов панели
     console.print(Panel("Удаление файлов панели...", title="Шаг 4", border_style="yellow"))
-    run_command('rm -rf /var/www/pterodactyl', spinner_message="Удаление /var/www/pterodactyl...")
+    run_command_with_dpkg_fix('rm -rf /var/www/pterodactyl', spinner_message="Удаление /var/www/pterodactyl...")
     console.print("[green]Файлы панели удалены![/green]")
     inquirer.text(message="Enter для продолжения...").execute()
 
@@ -332,7 +332,7 @@ def pterodactyl_diagnose_and_install():
         res = shutil.which(pkg.split()[0]) if pkg not in ("php8.3", "mariadb-server", "redis-server") else shutil.which(key)
         if not res:
             # Попробуем через команду
-            check = run_command(check_cmd, spinner_message=f"Проверка {desc}...")
+            check = run_command_with_dpkg_fix(check_cmd, spinner_message=f"Проверка {desc}...")
             if not check or check.returncode != 0:
                 console.print(f"[red]{desc} не найден![/red]")
                 missing.append((key, pkg, desc))
@@ -348,9 +348,9 @@ def pterodactyl_diagnose_and_install():
         for key, pkg, desc in missing:
             if key == "php":
                 # Для php — ставим через sury.org
-                run_command('apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip}', spinner_message="Установка PHP 8.3...")
+                run_command_with_dpkg_fix('apt install -y php8.3 php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,fpm,curl,zip}', spinner_message="Установка PHP 8.3...")
             else:
-                run_command(f"apt install -y {pkg}", spinner_message=f"Установка {desc}...")
+                run_command_with_dpkg_fix(f"apt install -y {pkg}", spinner_message=f"Установка {desc}...")
         console.print("[green]Попытка автоустановки завершена![/green]")
         inquirer.text(message="Enter для продолжения...").execute()
     else:
@@ -372,7 +372,7 @@ def pterodactyl_diagnose_and_install():
     inquirer.text(message="Enter для продолжения...").execute()
 
     # 6. Проверка крон-задачи
-    cron_check = run_command('crontab -l', spinner_message="Проверка крон-задач...")
+    cron_check = run_command_with_dpkg_fix('crontab -l', spinner_message="Проверка крон-задач...")
     if cron_check and '* * * * * php /var/www/pterodactyl/artisan schedule:run' in (cron_check.stdout or ''):
         console.print(Panel("[green]Крон-задача для artisan schedule:run найдена![/green]", title="Крон", border_style="green"))
     else:
@@ -416,3 +416,17 @@ def wings_manage_menu():
 # --- Вспомогательные функции ---
 # (Проверка статуса, ручные/manual_steps, doc_links, инструкции, локализация)
 # TODO: реализовать вспомогательные функции по необходимости 
+
+def run_command_with_dpkg_fix(cmd, spinner_message=None, cwd=None):
+    res = run_command(cmd, spinner_message=spinner_message, cwd=cwd)
+    # Проверка на dpkg was interrupted
+    err_out = (res.stderr or '') + '\n' + (res.stdout or '') if res else ''
+    if 'dpkg was interrupted' in err_out:
+        console.print(Panel("[yellow]Обнаружена проблема с dpkg![/yellow]\n[cyan]Выполняется автоматическое восстановление: dpkg --configure -a[/cyan]", title="dpkg auto-fix", border_style="yellow"))
+        fix = run_command('dpkg --configure -a', spinner_message="dpkg --configure -a ...", cwd=cwd)
+        if fix and fix.returncode == 0:
+            console.print("[green]dpkg --configure -a выполнено успешно! Повтор команды...[/green]")
+            res = run_command(cmd, spinner_message=spinner_message, cwd=cwd)
+        else:
+            console.print(Panel((fix.stderr or fix.stdout or "Не удалось выполнить dpkg --configure -a"), title="[red]Ошибка dpkg --configure -a[/red]", border_style="red"))
+    return res 
