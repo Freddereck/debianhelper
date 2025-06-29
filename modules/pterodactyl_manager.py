@@ -253,7 +253,6 @@ def pterodactyl_install_wizard():
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
     console.print("[green]Базовые пакеты установлены![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
 
     # 3. Добавление репозитория PHP (sury.org)
     console.print(Panel("Добавление репозитория PHP (sury.org)...", title="Шаг 2", border_style="yellow"))
@@ -264,7 +263,6 @@ def pterodactyl_install_wizard():
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
     console.print("[green]Репозиторий PHP добавлен![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
 
     # 4. Добавление репозитория Redis
     console.print(Panel("Добавление репозитория Redis...", title="Шаг 3", border_style="yellow"))
@@ -275,7 +273,6 @@ def pterodactyl_install_wizard():
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
     console.print("[green]Репозиторий Redis добавлен![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
 
     # 5. MariaDB repo setup
     console.print(Panel("Добавление репозитория MariaDB...", title="Шаг 4", border_style="yellow"))
@@ -285,7 +282,6 @@ def pterodactyl_install_wizard():
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
     console.print("[green]Репозиторий MariaDB добавлен![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
 
     # 6. apt update
     console.print(Panel("Обновление списка пакетов...", title="Шаг 5", border_style="yellow"))
@@ -295,7 +291,6 @@ def pterodactyl_install_wizard():
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
     console.print("[green]Список пакетов обновлён![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
 
     # 7. Установка зависимостей
     dependencies_list = [
@@ -304,14 +299,13 @@ def pterodactyl_install_wizard():
     ]
     console.print(Panel(
         "[bold yellow]Установка зависимостей (примерно 2-5 минут, зависит от скорости сети и системы)...[/bold yellow]\n"
-        "Пакеты: [cyan]" + ", ".join(dependencies_list) + "[/cyan]",
+        "Пакеты: [cyan]" + ", ".join(dependencies_list) + "[cyan]",
         title="Шаг 6: Установка зависимостей", border_style="yellow"))
     installed = []
     already = []
     failed = []
     for pkg in dependencies_list:
         console.print(f"[cyan]Устанавливается: {pkg} ...[/cyan]")
-        # Проверка, установлен ли уже
         check = run_command_with_dpkg_fix(f"dpkg -s {pkg}", spinner_message=f"Проверка {pkg}...")
         if check and check.returncode == 0:
             console.print(f"[yellow]{pkg} уже установлен.[/yellow]")
@@ -319,41 +313,38 @@ def pterodactyl_install_wizard():
             continue
         res = run_command_with_dpkg_fix(f"apt install -y {pkg}", spinner_message=f"Установка {pkg}...")
         if res and res.returncode == 0:
-            console.print(f"[green]{pkg} успешно установлен![/green]")
+            console.print(f"[green]{pkg} успешно установлен![green]")
             installed.append(pkg)
         else:
-            console.print(f"[red]Ошибка при установке {pkg}![/red]")
+            console.print(f"[red]Ошибка при установке {pkg}![red]")
             if res:
                 if res.stderr:
-                    console.print(Panel(res.stderr, title=f"[red]apt-get stderr для {pkg}[/red]", border_style="red"))
+                    console.print(Panel(res.stderr, title=f"[red]apt-get stderr для {pkg}[red]", border_style="red"))
                 if res.stdout:
-                    console.print(Panel(res.stdout, title=f"[yellow]apt-get stdout для {pkg}[/yellow]", border_style="yellow"))
+                    console.print(Panel(res.stdout, title=f"[yellow]apt-get stdout для {pkg}[yellow]", border_style="yellow"))
             console.print("[bold]Возможные причины:[/bold] Нет интернета, проблемы с репозиториями, конфликт пакетов, недостаточно места, dpkg/apt заблокирован.")
             failed.append(pkg)
-    # Итоговая сводка
     summary = ""
     if installed:
-        summary += "[green]Установлены:[/green] " + ", ".join(installed) + "\n"
+        summary += "[green]Установлены:[green] " + ", ".join(installed) + "\n"
     if already:
-        summary += "[yellow]Уже были:[/yellow] " + ", ".join(already) + "\n"
+        summary += "[yellow]Уже были:[yellow] " + ", ".join(already) + "\n"
     if failed:
-        summary += "[red]Не удалось установить:[/red] " + ", ".join(failed) + "\n"
+        summary += "[red]Не удалось установить:[red] " + ", ".join(failed) + "\n"
     if not failed:
-        summary += "[bold green]Все зависимости установлены![/bold green]"
+        summary += "[bold green]Все зависимости установлены![bold green]"
     else:
-        summary += "[bold red]Есть ошибки! Проверьте вывод выше и устраните проблемы вручную.[/bold red]"
+        summary += "[bold red]Есть ошибки! Проверьте вывод выше и устраните проблемы вручную.[bold red]"
     console.print(Panel(summary, title="Итог установки зависимостей", border_style="green" if not failed else "red"))
-    inquirer.text(message="Enter для продолжения...").execute()
 
     # 8. Установка Composer
     console.print(Panel("Установка Composer...", title="Шаг 7", border_style="yellow"))
     res = run_command_with_dpkg_fix('curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer', spinner_message="Установка Composer...")
     if res and res.returncode != 0:
-        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка установки Composer[/red]", border_style="red"))
+        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка установки Composer[red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
-    console.print("[green]Composer установлен![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
+    console.print("[green]Composer установлен![green]")
 
     # 9. Скачивание и распаковка панели
     console.print(Panel("Скачивание и распаковка Pterodactyl Panel...", title="Шаг 8", border_style="yellow"))
@@ -361,8 +352,7 @@ def pterodactyl_install_wizard():
     run_command_with_dpkg_fix('cd /var/www/pterodactyl && curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz', spinner_message="Скачивание архива панели...")
     run_command_with_dpkg_fix('cd /var/www/pterodactyl && tar -xzvf panel.tar.gz', spinner_message="Распаковка архива...")
     run_command_with_dpkg_fix('cd /var/www/pterodactyl && chmod -R 755 storage/* bootstrap/cache/', spinner_message="Права на storage и cache...")
-    console.print("[green]Файлы панели скачаны и распакованы![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
+    console.print("[green]Файлы панели скачаны и распакованы![green]")
 
     # 10. Инструкция/автоматизация по созданию БД
     console.print(Panel("[bold]Вам нужно создать базу данных и пользователя для Pterodactyl.[/bold]\n\nМожно сделать это автоматически или вручную.\n", title="Шаг 9: База данных", border_style="yellow"))
@@ -382,85 +372,175 @@ def pterodactyl_install_wizard():
             cmd = f"mariadb -u root -p{root_pass} --execute=\"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;\""
         res = run_command_with_dpkg_fix(cmd, spinner_message="Создание БД и пользователя...")
         if res and res.returncode == 0:
-            console.print(Panel(f"[green]База данных и пользователь успешно созданы![/green]\n\n[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}\n\n[bold yellow]Сохраните эти параметры![/bold yellow]", title="БД создана", border_style="green"))
+            console.print(Panel(f"[green]База данных и пользователь успешно созданы![green]\n\n[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}\n\n[bold yellow]Сохраните эти параметры![bold yellow]", title="БД создана", border_style="green"))
         else:
-            console.print(Panel(f"[red]Ошибка автоматического создания БД![/red]\n\nПопробуйте выполнить шаг вручную.\n\n[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[/cyan]\n\n[cyan]CREATE USER '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}';\nCREATE DATABASE {db_name};\nGRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;\nexit[/cyan]", title="Ошибка создания БД", border_style="red"))
+            console.print(Panel(f"[red]Ошибка автоматического создания БД![red]\n\nПопробуйте выполнить шаг вручную.\n\n[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[cyan]\n\n[cyan]CREATE USER '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}';\nCREATE DATABASE {db_name};\nGRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;\nexit[cyan]", title="Ошибка создания БД", border_style="red"))
             inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
     else:
-        console.print(Panel("[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[/cyan]\n\n[cyan]CREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY 'yourPassword';\nCREATE DATABASE panel;\nGRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;\nexit[/cyan]\n\n[bold yellow]Скопируйте команды выше и выполните их в отдельном терминале![/bold yellow]", title="Ручное создание БД", border_style="yellow"))
+        console.print(Panel("[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[cyan]\n\n[cyan]CREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY 'yourPassword';\nCREATE DATABASE panel;\nGRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;\nexit[cyan]\n\n[bold yellow]Скопируйте команды выше и выполните их в отдельном терминале![bold yellow]", title="Ручное создание БД", border_style="yellow"))
         inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
 
     # 11. Установка зависимостей через composer
     console.print(Panel("Установка зависимостей через composer...", title="Шаг 10", border_style="yellow"))
     res = run_command_with_dpkg_fix('cd /var/www/pterodactyl && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader', spinner_message="composer install...")
     if res and res.returncode != 0:
-        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка composer install[/red]", border_style="red"))
+        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка composer install[red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
-    console.print("[green]Composer зависимости установлены![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
+    console.print("[green]Composer зависимости установлены![green]")
 
     # 12. Генерация ключа приложения
     console.print(Panel("Генерация ключа приложения...", title="Шаг 11", border_style="yellow"))
-    # Проверка и копирование .env
     env_path = '/var/www/pterodactyl/.env'
     env_example_path = '/var/www/pterodactyl/.env.example'
     if not os.path.exists(env_path):
         if os.path.exists(env_example_path):
             res_cp = run_command_with_dpkg_fix(f'cp {env_example_path} {env_path}', spinner_message="Копирование .env.example -> .env ...")
             if res_cp and res_cp.returncode != 0:
-                console.print(Panel(res_cp.stderr or res_cp.stdout or "Не удалось скопировать .env.example", title="[red]Ошибка копирования .env[/red]", border_style="red"))
+                console.print(Panel(res_cp.stderr or res_cp.stdout or "Не удалось скопировать .env.example", title="[red]Ошибка копирования .env[red]", border_style="red"))
                 inquirer.text(message="Нажмите Enter для выхода...").execute()
                 return
         else:
-            console.print(Panel("[red].env.example не найден! Не могу создать .env[/red]", title="Ошибка .env", border_style="red"))
+            console.print(Panel("[red].env.example не найден! Не могу создать .env[red]", title="Ошибка .env", border_style="red"))
             inquirer.text(message="Нажмите Enter для выхода...").execute()
             return
     res = run_command_with_dpkg_fix('cd /var/www/pterodactyl && php artisan key:generate --force', spinner_message="artisan key:generate...")
     if res and res.returncode != 0:
-        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка artisan key:generate[/red]", border_style="red"))
+        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка artisan key:generate[red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
-    console.print("[green]Ключ приложения сгенерирован![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
+    console.print("[green]Ключ приложения сгенерирован![green]")
 
-    # 13. Artisan environment setup
-    console.print(Panel("[bold]Теперь настройте окружение через artisan.[/bold]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:environment:setup\nphp artisan p:environment:database\nphp artisan p:environment:mail[/cyan]\n\nСледуйте инструкциям в консоли!", title="Шаг 12: Настройка окружения", border_style="yellow"))
-    inquirer.text(message="Нажмите Enter, когда artisan setup будет завершён...").execute()
+    # 13. Автоматизация artisan environment setup
+    for cmd in [
+        'php artisan p:environment:setup',
+        'php artisan p:environment:database',
+        'php artisan p:environment:mail']:
+        res = run_command_with_dpkg_fix(f'cd /var/www/pterodactyl && {cmd}', spinner_message=cmd)
+        if res and res.returncode == 0:
+            console.print(Panel(res.stdout or f"[green]{cmd} выполнено![green]", title=cmd, border_style="green"))
+        else:
+            console.print(Panel((res.stderr or res.stdout or f"[red]Ошибка {cmd}[red]"), title=f"Ошибка {cmd}", border_style="red"))
+            inquirer.text(message=f"{cmd} требует ручного ввода. Нажмите Enter после завершения...").execute()
+            break
 
     # 14. Миграция и seed базы
     console.print(Panel("Миграция и seed базы...", title="Шаг 13", border_style="yellow"))
     res = run_command_with_dpkg_fix('cd /var/www/pterodactyl && php artisan migrate --seed --force', spinner_message="artisan migrate --seed...")
     if res and res.returncode != 0:
-        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка artisan migrate --seed[/red]", border_style="red"))
+        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка artisan migrate --seed[red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
-    console.print("[green]Миграция и seed базы выполнены![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
+    console.print("[green]Миграция и seed базы выполнены![green]")
 
-    # 15. Создание первого пользователя
-    console.print(Panel("Создайте первого администратора панели:\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make[/cyan]\n\nСледуйте инструкциям в консоли!", title="Шаг 14: Первый пользователь", border_style="yellow"))
-    inquirer.text(message="Нажмите Enter, когда пользователь будет создан...").execute()
+    # 15. Автоматизация создания первого пользователя
+    import secrets
+    import string
+    admin_email = f"admin@{domain if 'domain' in locals() else 'localhost'}"
+    admin_name = "admin"
+    admin_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+    # Попробуем автоматизировать через echo (если artisan поддерживает non-interactive)
+    user_cmd = f"cd /var/www/pterodactyl && echo -e '{admin_name}\n{admin_email}\n{admin_pass}\n{admin_pass}\n' | php artisan p:user:make"
+    res = run_command_with_dpkg_fix(user_cmd, spinner_message="Создание администратора панели...")
+    if res and res.returncode == 0 and 'User Created' in (res.stdout or ''):
+        console.print(Panel(f"[green]Администратор создан автоматически![/green]\n\n[cyan]Email:[/cyan] {admin_email}\n[cyan]Имя:[/cyan] {admin_name}\n[cyan]Пароль:[/cyan] {admin_pass}", title="Админ создан", border_style="green"))
+    else:
+        console.print(Panel("[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make[cyan]", title="Ручное создание админа", border_style="yellow"))
+        inquirer.text(message="Нажмите Enter, когда пользователь будет создан...").execute()
 
     # 16. Права на папку
     console.print(Panel("Установка прав на папку для www-data...", title="Шаг 15", border_style="yellow"))
     res = run_command_with_dpkg_fix('chown -R www-data:www-data /var/www/pterodactyl/*', spinner_message="chown www-data...")
     if res and res.returncode != 0:
-        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка chown[/red]", border_style="red"))
+        console.print(Panel(res.stderr or res.stdout or "Неизвестная ошибка", title="[red]Ошибка chown[red]", border_style="red"))
         inquirer.text(message="Нажмите Enter для выхода...").execute()
         return
-    console.print("[green]Права на папку установлены![/green]")
-    inquirer.text(message="Enter для продолжения...").execute()
+    console.print("[green]Права на папку установлены![green]")
 
-    # 17. Инструкция по nginx
-    _ensure_nginx_pterodactyl()
+    # 17. Инструкция по nginx (до этого шага должен быть определён domain)
+    # domain определяем заранее
+    def get_default_ip():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('8.8.8.8', 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = '127.0.0.1'
+        finally:
+            s.close()
+        return ip
+    # Определяем домен или IP
+    env_path = '/var/www/pterodactyl/.env'
+    domain = None
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith('APP_URL='):
+                    domain = line.strip().split('=',1)[1].replace('https://','').replace('http://','').split(':')[0]
+                    break
+    if not domain or domain in ("localhost", "127.0.0.1"):
+        domain = get_default_ip()
+    # Предложить сменить/установить домен
+    change_domain = inquirer.confirm(message=f"Текущий домен/IP панели: {domain}. Хотите изменить/установить свой домен?", default=False).execute()
+    if change_domain:
+        domain = inquirer.text(message="Введите домен для панели (например, panel.example.com):", default=domain).execute()
+        # Сохраняем в .env
+        if os.path.exists(env_path):
+            lines = []
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith('APP_URL='):
+                        lines.append(f'APP_URL=https://{domain}\n')
+                    else:
+                        lines.append(line)
+            with open(env_path, 'w') as f:
+                f.writelines(lines)
+    _ensure_nginx_pterodactyl(domain)
 
-    # 18. Инструкция по крону и systemd
-    console.print(Panel("[bold]Добавьте крон и systemd unit для очереди![/bold]\n\n[cyan]crontab -e[/cyan]\n* * * * * php /var/www/pterodactyl/artisan schedule:run >> /dev/null 2>&1\n\n[cyan]cat > /etc/systemd/system/pteroq.service <<EOF\n[Unit]\nDescription=Pterodactyl Queue Worker\nAfter=redis-server.service\n[Service]\nUser=www-data\nGroup=www-data\nRestart=always\nExecStart=/usr/bin/php /var/www/pterodactyl/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3\nStartLimitInterval=180\nStartLimitBurst=30\nRestartSec=5s\n[Install]\nWantedBy=multi-user.target\nEOF\nsystemctl enable --now pteroq.service[/cyan]", title="Шаг 17: Крон и systemd", border_style="yellow"))
-    inquirer.text(message="Нажмите Enter, когда крон и systemd unit будут настроены...").execute()
+    # 18. Автоматизация крон и systemd unit для очереди
+    # Крон
+    import subprocess
+    cron_line = '* * * * * php /var/www/pterodactyl/artisan schedule:run >> /dev/null 2>&1'
+    try:
+        res = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+        lines = res.stdout.splitlines() if res.returncode == 0 else []
+        if cron_line not in lines:
+            lines.append(cron_line)
+            new_cron = '\n'.join(lines) + '\n'
+            subprocess.run(['crontab', '-'], input=new_cron, text=True)
+            console.print('[green]Крон-задача добавлена![/green]')
+        else:
+            console.print('[yellow]Крон-задача уже была добавлена.[/yellow]')
+    except Exception as e:
+        console.print(f'[red]Ошибка при добавлении крон-задачи: {e}[/red]')
+    # Systemd unit
+    pteroq_unit = '''[Unit]
+Description=Pterodactyl Queue Worker
+After=redis-server.service
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+ExecStart=/usr/bin/php /var/www/pterodactyl/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3
+StartLimitInterval=180
+StartLimitBurst=30
+RestartSec=5s
+[Install]
+WantedBy=multi-user.target
+'''
+    unit_path = '/etc/systemd/system/pteroq.service'
+    try:
+        with open(unit_path, 'w') as f:
+            f.write(pteroq_unit)
+        subprocess.run(['systemctl', 'daemon-reload'])
+        subprocess.run(['systemctl', 'enable', '--now', 'pteroq.service'])
+        console.print('[green]systemd unit pteroq создан и запущен![/green]')
+    except Exception as e:
+        console.print(f'[red]Ошибка при создании systemd unit: {e}[/red]')
 
     # 19. Финальное напутствие
-    console.print(Panel("[bold green]Установка Pterodactyl завершена![/bold green]\n\nПанель доступна по адресу вашего домена.\n\n[cyan]Документация: https://pterodactyl.io/panel/1.11/getting_started.html[/cyan]", title="Готово!", border_style="green"))
+    url = f'https://{domain}'
+    console.print(Panel(f"[bold green]Установка Pterodactyl завершена![bold green]\n\nПанель доступна по адресу: [cyan]{url}[/cyan]\n\n[cyan]Документация: https://pterodactyl.io/panel/1.11/getting_started.html[cyan]", title="Готово!", border_style="green"))
     inquirer.text(message="Нажмите Enter для выхода...").execute()
 
     # После установки файлов панели и .env:
