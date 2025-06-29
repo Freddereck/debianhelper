@@ -1149,3 +1149,59 @@ def _is_port_free(port):
         return True
     except OSError:
         return False
+
+    # Проверка APP_TIMEZONE в .env
+    timezone = None
+    if os.path.exists(db_path):
+        with open(db_path) as f:
+            env = f.read()
+            m = re.search(r'APP_TIMEZONE=(.*)', env)
+            if m:
+                timezone = m.group(1).strip()
+    # Список валидных таймзон (сокращённый, можно расширить)
+    valid_timezones = [
+        'UTC', 'Europe/Moscow', 'Asia/Novosibirsk', 'Asia/Krasnoyarsk', 'Asia/Yekaterinburg',
+        'Europe/Samara', 'Europe/Kaliningrad', 'Asia/Vladivostok', 'Asia/Irkutsk', 'Asia/Omsk',
+        'Asia/Barnaul', 'Asia/Tomsk', 'Asia/Chita', 'Asia/Sakhalin', 'Asia/Magadan', 'Asia/Kamchatka',
+        'Asia/Srednekolymsk', 'Asia/Ust-Nera', 'Asia/Anadyr', 'Asia/Yakutsk', 'Asia/Krasnoyarsk',
+        'Asia/Novokuznetsk', 'Asia/Khandyga', 'Asia/Chita', 'Asia/Irkutsk', 'Asia/Ulaanbaatar',
+        'Asia/Hong_Kong', 'Asia/Bangkok', 'Asia/Singapore', 'Asia/Shanghai', 'Asia/Tokyo',
+        'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Europe/Rome', 'Europe/Madrid',
+        'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+        'Etc/GMT-3', 'Etc/GMT-4', 'Etc/GMT-5', 'Etc/GMT-6', 'Etc/GMT-7', 'Etc/GMT-8', 'Etc/GMT-9',
+    ]
+    def is_valid_timezone(tz):
+        if not tz:
+            return False
+        if tz in valid_timezones:
+            return True
+        # Проверка на Etc/GMT±N
+        import re
+        if re.match(r'^Etc/GMT[+-]\d+$', tz):
+            return True
+        # Проверка на Europe/..., Asia/..., America/... и т.д.
+        if re.match(r'^[A-Za-z]+/[A-Za-z_\-]+$', tz):
+            return True
+        return False
+    if timezone and not is_valid_timezone(timezone):
+        console.print(Panel(f"[yellow]Внимание: В .env указана невалидная таймзона: {timezone}\nРекомендуется выбрать корректную таймзону из списка PHP: https://www.php.net/manual/en/timezones.php[/yellow]", title="APP_TIMEZONE невалидна", border_style="yellow"))
+        # Предложить выбрать из списка
+        tz_choice = inquirer.select(
+            message="Выберите корректную таймзону для панели:",
+            choices=valid_timezones + ["Ввести вручную"]
+        ).execute()
+        if tz_choice == "Ввести вручную":
+            tz_choice = inquirer.text(message="Введите корректную таймзону (например, Europe/Moscow):").execute()
+        # Исправить .env
+        with open(db_path, 'r') as f:
+            lines = f.readlines()
+        with open(db_path, 'w') as f:
+            for line in lines:
+                if line.startswith('APP_TIMEZONE='):
+                    f.write(f'APP_TIMEZONE={tz_choice}\n')
+                else:
+                    f.write(line)
+        console.print(Panel(f"[green]APP_TIMEZONE в .env автоматически исправлен на {tz_choice}!\nПерезапускаю nginx и php-fpm...[/green]", title="APP_TIMEZONE исправлен", border_style="green"))
+        import subprocess
+        subprocess.run(['systemctl', 'restart', 'nginx'])
+        subprocess.run(['systemctl', 'restart', 'php8.3-fpm'])
