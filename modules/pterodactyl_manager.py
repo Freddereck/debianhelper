@@ -634,9 +634,15 @@ def pterodactyl_install_wizard():
     ]:
         res = run_command_with_dpkg_fix(f"cd /var/www/pterodactyl && {cmd} {' '.join(args)}", spinner_message=title)
         if res and res.returncode == 0:
-            console.print(Panel(res.stdout or f"[green]{title} выполнено![green]", title=title, border_style="green"))
+            console.print(Panel(res.stdout or f"[green]{title} выполнено![/green]", title=title, border_style="green"))
+            # Явное подтверждение и короткая пауза
+            if title == 'Database Settings':
+                console.print("[green]Настройка базы данных завершена успешно![/green]")
+            elif title == 'Mail Settings':
+                console.print("[green]Почтовые параметры сохранены![/green]")
+            # Переход к следующему шагу без лишнего Enter
         else:
-            console.print(Panel((res.stderr or res.stdout or f"[red]Ошибка {title}[red]"), title=f"Ошибка {title}", border_style="red"))
+            console.print(Panel((res.stderr or res.stdout or f"[red]Ошибка {title}[/red]"), title=f"Ошибка {title}", border_style="red"))
             if title == 'Database Settings':
                 console.print(Panel("[yellow]Если процесс завис — проверьте соединение с MariaDB, параметры доступа и повторите установку.\nВозможно, требуется задать пароль пользователя БД или разрешить root-доступ по socket.[/yellow]", title="Database Settings завис", border_style="yellow"))
             inquirer.text(message=f"{title} требует ручного ввода. Нажмите Enter после завершения...").execute()
@@ -762,7 +768,9 @@ WantedBy=multi-user.target
 
     # 19. Финальное напутствие
     url = f'https://{domain}'
-    console.print(Panel(f"[bold green]Установка Pterodactyl завершена![bold green]\n\nПанель доступна по адресу: [cyan]{url}[/cyan]\n\n[cyan]Документация: https://pterodactyl.io/panel/1.11/getting_started.html[cyan]", title="Готово!", border_style="green"))
+    console.print(Panel(f"[bold green]Установка Pterodactyl завершена![/bold green]\n\nПанель доступна по адресу: [cyan]{url}[/cyan]\n\n[bold]ВАЖНО:[/bold] Для входа используйте только [bold]https[/bold]! Если используете self-signed сертификат — браузер покажет предупреждение, выберите 'Продолжить' или 'Advanced -> Proceed'.\n\nЕсли видите ошибку [red]CSRF token mismatch[/red]:\n- Проверьте, что APP_URL в .env совпадает с адресом в браузере и начинается с https://\n- Перезапустите nginx и php-fpm после изменения .env\n- Очистите cookies в браузере\n\n[bold]Документация:[/bold] https://pterodactyl.io/panel/1.11/getting_started.html\n\n[bold yellow]Рекомендуется сразу сменить пароль администратора и настроить рабочий SMTP для почты![/bold yellow]", title="Готово!", border_style="green"))
+    if domain and (domain == get_default_ip() or re.match(r'^\d+\.\d+\.\d+\.\d+$', domain)):
+        console.print(Panel("[yellow]Вы используете self-signed SSL сертификат для IP. Браузер покажет предупреждение о безопасности — выберите 'Продолжить' или 'Advanced -> Proceed'. Для production используйте домен и Let's Encrypt![/yellow]", title="Self-signed SSL", border_style="yellow"))
     inquirer.text(message="Нажмите Enter для выхода...").execute()
 
     # После установки файлов панели и .env:
