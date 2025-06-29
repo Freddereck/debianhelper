@@ -30,6 +30,7 @@ except ImportError:
 console = Console()
 
 def _get_pterodactyl_info():
+    db_path = '/var/www/pterodactyl/.env'
     # Статус nginx
     nginx_status = run_command_with_dpkg_fix('systemctl is-active nginx')
     nginx_status_str = nginx_status.stdout.strip() if nginx_status and nginx_status.returncode == 0 else 'unknown'
@@ -107,7 +108,6 @@ def _get_pterodactyl_info():
         console.print(Panel(f"[yellow]Внимание: SSL включён, но APP_URL в .env не начинается с https!\nТекущий APP_URL: {app_url}\nРекомендуется исправить на https://{domain} и перезапустить nginx и php-fpm.[/yellow]", title="APP_URL и SSL", border_style="yellow"))
     # Данные БД (если есть)
     db_info = None
-    db_path = '/var/www/pterodactyl/.env'
     if os.path.exists(db_path):
         with open(db_path) as f:
             env = f.read()
