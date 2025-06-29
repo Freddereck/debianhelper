@@ -728,6 +728,22 @@ def pterodactyl_install_wizard():
             with open(env_path, 'w') as f:
                 f.writelines(lines)
     _ensure_nginx_pterodactyl(domain)
+    # --- Автоматическая установка Let's Encrypt SSL для домена ---
+    if domain and not (domain == get_default_ip() or re.match(r'^\d+\.\d+\.\d+\.\d+$', domain)):
+        admin_email = defaults.get('author', f'admin@{domain}')
+        console.print(Panel(f"[bold]Попытка автоматической установки SSL-сертификата Let's Encrypt для домена {domain}...[/bold]\n\nEmail для регистрации: {admin_email}", title="SSL для домена", border_style="yellow"))
+        import shutil
+        if not shutil.which('certbot'):
+            console.print("[yellow]Certbot не найден, устанавливаю...[/yellow]")
+            run_command_with_dpkg_fix('apt update', spinner_message="apt update для certbot...")
+            run_command_with_dpkg_fix('apt install -y certbot python3-certbot-nginx', spinner_message="Установка certbot...")
+        certbot_cmd = f"certbot --nginx --non-interactive --agree-tos -m {admin_email} -d {domain} --redirect"
+        res = run_command_with_dpkg_fix(certbot_cmd, spinner_message="Получение SSL-сертификата...")
+        if res and res.returncode == 0:
+            console.print(Panel(f"[green]Let's Encrypt SSL-сертификат успешно установлен для {domain}![/green]", title="SSL установлен", border_style="green"))
+            run_command_with_dpkg_fix('systemctl reload nginx', spinner_message="Перезапуск nginx...")
+        else:
+            console.print(Panel(f"[red]Не удалось автоматически получить SSL-сертификат для {domain}![/red]\n\nПроверьте DNS, порт 80, и повторите попытку вручную:\n[cyan]{certbot_cmd}[/cyan]", title="Ошибка SSL", border_style="red"))
 
     # 18. Автоматизация крон и systemd unit для очереди
     # Крон
