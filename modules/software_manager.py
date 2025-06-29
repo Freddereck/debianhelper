@@ -312,15 +312,31 @@ def _handle_install(key):
                 console.print(res.stdout.strip())
         else:
             err_out = (res.stderr or '') + '\n' + (res.stdout or '') if res else ''
-            console.print(Panel(err_out.strip() or '[red]Неизвестная ошибка[/red]', title="[red]Детали ошибки[/red]", border_style="red"))
-            # Fallback: советы и ссылки
-            if key in ("webmin", "pterodactyl", "wings"):
+            if not err_out.strip():
+                # Нет вывода — показываем подробный разбор
+                possible_causes = [
+                    "Нет интернет-соединения",
+                    "Не установлен curl/bash/systemd/docker/git/composer/php/mysql/mariadb/redis (или не та версия)",
+                    "Недостаточно прав (запустите с sudo)",
+                    "Ваша ОС не поддерживается (например, OpenVZ)",
+                    "Ошибка в скрипте установки или устаревшая команда"
+                ]
+                cmd = data["install_cmd"]
                 doc_links = {
                     "webmin": "https://www.webmin.com/",
-                    "pterodactyl": "https://pterodactyl.io/panel/1.11/getting_started.html",
+                    "pterodactyl": "https://pterodactyl.io/panel/1.0/getting_started.html#installing-composer",
                     "wings": "https://pterodactyl.io/wings/1.11/installing.html"
                 }
-                console.print(Panel(f"[yellow]Попробуйте ручную установку по инструкции: {doc_links[key]}[/yellow]", title="[yellow]Что делать?[/yellow]", border_style="yellow"))
+                doc = doc_links.get(key, None)
+                msg = f"[red]Команда завершилась с ошибкой, но не вернула подробностей.[/red]\n\n"
+                msg += f"[bold]Выполненная команда:[/bold]\n[cyan]{cmd}[/cyan]\n\n"
+                msg += "[bold]Возможные причины:[/bold]\n- " + "\n- ".join(possible_causes) + "\n\n"
+                msg += "[bold]Что делать:[/bold]\n- Попробуйте выполнить команду вручную в терминале для получения подробного вывода.\n"
+                if doc:
+                    msg += f"- Ознакомьтесь с официальной документацией: [link={doc}]{doc}[/link]"
+                console.print(Panel(msg, title="[red]Детали ошибки[/red]", border_style="red"))
+            else:
+                console.print(Panel(err_out.strip() or '[red]Неизвестная ошибка[/red]', title="[red]Детали ошибки[/red]", border_style="red"))
             inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
         return
 
@@ -1079,3 +1095,30 @@ def java_diagnostics():
         with open(JAVA_PATH_CONFIG, 'w') as f:
             f.write(found_path.strip())
     inquirer.text(message=get_string('press_enter_to_continue')).execute() 
+
+def check_pterodactyl_dependencies():
+    from rich.panel import Panel
+    import shutil
+    checks = [
+        ("Docker", shutil.which('docker')),
+        ("curl", shutil.which('curl')),
+        ("bash", shutil.which('bash')),
+        ("systemd", shutil.which('systemctl')),
+        ("git", shutil.which('git')),
+        ("composer", shutil.which('composer')),
+        ("php", shutil.which('php')),
+        ("mysql/mariadb", shutil.which('mysql') or shutil.which('mariadb')),
+        ("redis-server", shutil.which('redis-server')),
+        ("tar", shutil.which('tar')),
+        ("unzip", shutil.which('unzip')),
+        ("nginx/apache/caddy", shutil.which('nginx') or shutil.which('apache2') or shutil.which('caddy')),
+    ]
+    missing = [name for name, found in checks if not found]
+    if missing:
+        msg = "[red]Не найдены необходимые зависимости для установки Pterodactyl:[/red]\n- " + "\n- ".join(missing)
+        msg += "\n\n[bold]Установите их вручную перед продолжением![/bold]"
+        msg += "\n\n[link=https://pterodactyl.io/panel/1.0/getting_started.html#dependencies]Список зависимостей и инструкции[/link]"
+        console.print(Panel(msg, title="[red]Проверка зависимостей Pterodactyl[/red]", border_style="red"))
+    else:
+        console.print(Panel("[green]Все основные зависимости для Pterodactyl найдены![/green]", title="[green]Проверка зависимостей[/green]", border_style="green"))
+    inquirer.text(message=get_string("press_enter_to_continue")).execute() 
