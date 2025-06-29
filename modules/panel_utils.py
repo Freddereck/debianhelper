@@ -19,12 +19,19 @@ def run_command(cmd, spinner_message=None, cwd=None):
             shell = True
         else:
             shell = False
+        # Логируем команду для отладки
+        console.print(f"[yellow]Выполняется команда:[/yellow] {cmd}")
         if spinner_message:
             with console.status(spinner_message):
-                console.print(f"[yellow]Выполняется команда:[/yellow] {cmd}")
-                res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=shell)
+                if shell:
+                    res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=True, executable="/bin/bash")
+                else:
+                    res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=False)
         else:
-            res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=shell)
+            if shell:
+                res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=True, executable="/bin/bash")
+            else:
+                res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=False)
         return res
     except Exception as e:
         return None
