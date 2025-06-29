@@ -2,6 +2,7 @@ import sys
 import subprocess
 import os
 import shutil
+import time
 
 # --- Dependency Check ---
 try:
@@ -174,7 +175,6 @@ def get_language():
     return True
 
 def update_self():
-    import time
     # Проверка git
     if not shutil.which('git'):
         console.print(Panel("Git не установлен. Устанавливаю git...", title="[yellow]Установка git[/yellow]", border_style="yellow"))
@@ -224,7 +224,6 @@ def update_self():
             restart = inquirer.confirm(message="Перезапустить панель сейчас?", default=True).execute()
             if restart:
                 console.print("[yellow]Перезапуск панели...[/yellow]")
-                import os, sys
                 os.execv(sys.executable, [sys.executable] + sys.argv)
             else:
                 inquirer.text(message=get_string("press_enter_to_continue")).execute()
