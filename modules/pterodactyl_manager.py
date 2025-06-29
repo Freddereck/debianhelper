@@ -261,7 +261,6 @@ def pterodactyl_manage_menu():
             domain = info['url'].replace('https://','').replace('http://','').split(':')[0]
             cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
             key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
-            import os
             cert_exists = os.path.exists(cert_path) and os.path.exists(key_path)
             if cert_exists:
                 console.print(Panel(f"[green]SSL-сертификат для {domain} уже существует![/green]", title="SSL OK", border_style="green"))
@@ -506,7 +505,6 @@ def pterodactyl_install_wizard():
     run_command_with_dpkg_fix('cd /var/www/pterodactyl && tar -xzvf panel.tar.gz', spinner_message="Распаковка архива...")
     run_command_with_dpkg_fix('cd /var/www/pterodactyl && chmod -R 755 storage/* bootstrap/cache/', spinner_message="Права на storage и cache...")
     # --- NEW: Создание storage/logs и laravel.log, выставление прав ---
-    import os
     os.makedirs('/var/www/pterodactyl/storage/logs', exist_ok=True)
     with open('/var/www/pterodactyl/storage/logs/laravel.log', 'a') as f:
         pass
@@ -1169,7 +1167,6 @@ def _is_port_free(port):
         subprocess.run(['systemctl', 'restart', 'php8.3-fpm'])
 
 def _diagnose_ssl(domain):
-    import os
     import subprocess
     cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
     key_path = f"/etc/letsencrypt/live/{domain}/privkey.pem"
@@ -1215,7 +1212,6 @@ def _diagnose_ssl(domain):
         console.print(Panel(f"[green]SSL для {domain} настроен корректно![/green]", title="Диагностика SSL", border_style="green"))
 
 def pterodactyl_full_uninstall():
-    import os
     import subprocess
     from rich.panel import Panel
     # 1. Остановить и удалить systemd unit pteroq
