@@ -159,6 +159,13 @@ echo "---------------"
         "version_cmd": "java -version",
         "is_installed_check": lambda: shutil.which('java') is not None,
     },
+    "wg-dashboard": {
+        "display_name": "WireGuard Dashboard",
+        "package_name": "",
+        "service_name": "",
+        "version_cmd": "",
+        "is_installed_check": lambda: False,  # Заглушка, всегда не установлен
+    },
 }
 
 def _is_root():

@@ -952,8 +952,12 @@ def run_webserver_manager():
         choices = [
             Choice("install_nginx", name="Установить/проверить Nginx"),
             Choice("install_certbot", name="Установить/проверить Certbot (SSL)"),
-            Choice("uninstall_nginx", name="Удалить nginx"),
-            Choice("uninstall_certbot", name="Удалить certbot"),
+        ]
+        if shutil.which("nginx"):
+            choices.append(Choice("uninstall_nginx", name="Удалить nginx"))
+        if shutil.which("certbot"):
+            choices.append(Choice("uninstall_certbot", name="Удалить certbot"))
+        choices.extend([
             Choice("deploy_nodejs", name="Задеплоить Node.js/Next.js проект с GitHub"),
             Choice("deploy_existing", name="Додеплоить проект из существующей папки"),
             Choice("sites_manager", name=get_string("sites_manager_menu")),
@@ -962,7 +966,7 @@ def run_webserver_manager():
             Choice("deploy_php", name="Задеплоить PHP-проект (скоро)"),
             Choice("deploy_static", name="Задеплоить статический сайт (скоро)"),
             Choice(None, name="Назад")
-        ]
+        ])
         action = inquirer.select(
             message="Выберите действие:",
             choices=choices,
