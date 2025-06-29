@@ -525,7 +525,14 @@ def pterodactyl_install_wizard():
         console.print(f"[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}")
         console.print(Panel(get_string("pterodactyl_manage_menu_db_socket_help"), title="Подсказка", border_style="cyan"))
         use_socket = inquirer.confirm(message=get_string("pterodactyl_manage_menu_db_socket"), default=True).execute()
-        sql = f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;"
+        sql = (
+            f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; "
+            f"CREATE USER IF NOT EXISTS '{db_user}'@'localhost' IDENTIFIED BY '{db_pass}'; "
+            f"CREATE DATABASE IF NOT EXISTS {db_name}; "
+            f"GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; "
+            f"GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'localhost' WITH GRANT OPTION; "
+            f"FLUSH PRIVILEGES;"
+        )
         if use_socket:
             cmd = f"mariadb -u root --execute=\"{sql}\""
         else:
@@ -1275,6 +1282,7 @@ def _remove_pterodactyl_db():
         with conn.cursor() as cur:
             cur.execute(f"DROP DATABASE IF EXISTS `{db_name}`;")
             cur.execute(f"DROP USER IF EXISTS '{db_user}'@'127.0.0.1';")
+            cur.execute(f"DROP USER IF EXISTS '{db_user}'@'localhost';")
             cur.execute("FLUSH PRIVILEGES;")
         conn.commit()
         conn.close()
