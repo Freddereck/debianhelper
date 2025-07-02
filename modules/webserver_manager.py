@@ -338,7 +338,18 @@ def _deploy_nodejs_project():
         return
     # Клонирование или обновление
     if not os.path.exists(project_dir):
-        res = run_command(["git", "clone", repo_url, project_dir], get_string("webserver_cloning_repo", repo=repo_url))
+        # --- SSH: добавляем github.com в known_hosts ---
+        if repo_url.startswith("git@github.com"):
+            ssh_dir = os.path.expanduser("~/.ssh")
+            os.makedirs(ssh_dir, exist_ok=True)
+            known_hosts = os.path.join(ssh_dir, "known_hosts")
+            with open(known_hosts, "a") as kh:
+                subprocess.run(["ssh-keyscan", "github.com"], stdout=kh)
+            env = os.environ.copy()
+            env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"
+        else:
+            env = None
+        res = run_command(["git", "clone", repo_url, project_dir], get_string("webserver_cloning_repo", repo=repo_url), cwd=None, env=env)
         if not res or res.returncode != 0:
             # Показываем stderr/stdout
             err = res.stderr if res else ""
@@ -363,6 +374,21 @@ def _deploy_nodejs_project():
                         res2 = run_command(["git", "clone", repo_url_token, project_dir], get_string("webserver_cloning_repo", repo=repo_url_token))
                         if res2 and res2.returncode == 0:
                             console.print("[green]Клонирование с токеном успешно![/green]")
+                        else:
+                            console.print(Panel((res2.stderr or "") + "\n" + (res2.stdout or ""), title="git clone error", border_style="red"))
+                            return
+                    elif repo_url.startswith("git@github.com"):
+                        # Повторяем попытку с SSH-URL и env
+                        ssh_dir = os.path.expanduser("~/.ssh")
+                        os.makedirs(ssh_dir, exist_ok=True)
+                        known_hosts = os.path.join(ssh_dir, "known_hosts")
+                        with open(known_hosts, "a") as kh:
+                            subprocess.run(["ssh-keyscan", "github.com"], stdout=kh)
+                        env = os.environ.copy()
+                        env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=no"
+                        res2 = run_command(["git", "clone", repo_url, project_dir], get_string("webserver_cloning_repo", repo=repo_url), cwd=None, env=env)
+                        if res2 and res2.returncode == 0:
+                            console.print("[green]Клонирование по SSH успешно![/green]")
                         else:
                             console.print(Panel((res2.stderr or "") + "\n" + (res2.stdout or ""), title="git clone error", border_style="red"))
                             return
