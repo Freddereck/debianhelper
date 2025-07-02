@@ -12,7 +12,7 @@ def is_root():
     """Check if the script is run as root."""
     return os.geteuid() == 0
 
-def run_command(cmd, spinner_message=None, cwd=None):
+def run_command(cmd, spinner_message=None, cwd=None, env=None):
     """Runs a command (can be string for shell or list for exec) and shows a spinner."""
     try:
         if isinstance(cmd, str):
@@ -24,14 +24,14 @@ def run_command(cmd, spinner_message=None, cwd=None):
         if spinner_message:
             with console.status(spinner_message):
                 if shell:
-                    res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=True, executable="/bin/bash")
+                    res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=True, executable="/bin/bash", env=env)
                 else:
-                    res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=False)
+                    res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=False, env=env)
         else:
             if shell:
-                res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=True, executable="/bin/bash")
+                res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=True, executable="/bin/bash", env=env)
             else:
-                res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=False)
+                res = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, shell=False, env=env)
         return res
     except Exception as e:
         return None
