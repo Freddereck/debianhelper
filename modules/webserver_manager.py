@@ -58,6 +58,7 @@ def _install_nginx():
         console.print(Panel("[bold green]Управление Nginx[/bold green]", border_style="green"))
         choices = [
             Choice("list", name="Просмотреть все сайты/конфиги"),
+            Choice("create_site_nginx_only", name="Создать сайт (только Nginx, без деплоя кода)"),
             Choice("delete", name="Удалить конфиг сайта"),
             Choice("test", name="Проверить валидность конфига (nginx -t)"),
             Choice("reload", name="Перезапустить nginx (reload)"),
@@ -78,6 +79,33 @@ def _install_nginx():
                     enabled = os.path.exists(os.path.join(enabled_dir, name))
                     info += f"[bold]{name}[/bold] {'[green]ENABLED[/green]' if enabled else '[red]DISABLED[/red]'}\n"
                 console.print(Panel(info, title="Конфиги сайтов", border_style="cyan"))
+            inquirer.text(message="Нажмите Enter для продолжения...").execute()
+        elif action == "create_site_nginx_only":
+            # --- Новый функционал: создание сайта только nginx ---
+            domain = inquirer.text(message="Введите домен сайта:").execute()
+            if not domain or " " in domain:
+                console.print("[red]Домен не должен быть пустым и не должен содержать пробелов.[/red]")
+                inquirer.text(message="Нажмите Enter для продолжения...").execute()
+                continue
+            while True:
+                port_str = inquirer.text(message="Введите порт для проксирования (например, 3000):", default="3000").execute()
+                try:
+                    port = int(port_str)
+                    break
+                except Exception:
+                    console.print("[red]Порт должен быть числом.[/red]")
+            # Генерируем имя сайта по домену
+            site_name = domain.replace(".", "_")
+            # Создаём nginx-конфиг
+            _setup_nginx_proxy(site_name, project_dir="/dev/null", port=port, domain=domain)
+            # Предлагаем установить SSL
+            if shutil.which("certbot"):
+                setup_ssl = inquirer.confirm(message="Хотите сразу настроить бесплатный SSL для вашего домена через Certbot?", default=True).execute()
+                if setup_ssl:
+                    _setup_ssl_certbot(domain)
+            else:
+                console.print("[yellow]Certbot не установлен. SSL можно будет настроить позже.[/yellow]")
+            console.print(Panel(f"[green]Сайт {domain} настроен через nginx![/green]", title="Готово", border_style="green"))
             inquirer.text(message="Нажмите Enter для продолжения...").execute()
         elif action == "delete":
             import glob
