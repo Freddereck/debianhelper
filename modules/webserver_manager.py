@@ -236,7 +236,8 @@ def _show_github_access_menu():
             subprocess.run(["ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "", "-f", ssh_path[:-4]])
         with open(ssh_path) as f:
             pubkey = f.read().strip()
-        console.print(Panel(pubkey, title="Ваш публичный SSH-ключ (скопируйте полностью)", border_style="green"))
+        console.print("[bold green]Ваш публичный SSH-ключ (скопируйте строку ниже):[/bold green]")
+        console.print(pubkey)
         console.print("[cyan]Скопируйте этот ключ и добавьте его в GitHub → Settings → SSH and GPG keys. Не используйте его как токен![/cyan]")
         inquirer.text(message=get_string("press_enter_to_continue")).execute()
     elif action == "show_token_help":
