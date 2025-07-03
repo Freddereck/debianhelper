@@ -374,9 +374,23 @@ def install_pterodactyl_full_auto(console):
         "DB_USERNAME": db_user,
         "DB_PASSWORD": db_pass
     })
+    author_email = "admin@example.com"
     subprocess.run(["php", "artisan", "key:generate", "--force"], cwd=panel_dir, check=True)
     # 6. Artisan setup
-    subprocess.run(["php", "artisan", "p:environment:setup", "--author=admin@localhost", "--url=http://localhost", "--timezone=UTC", "--cache=file", "--session=file", "--queue=redis", "--redis-host=127.0.0.1", "--redis-port=6379", "--redis-pass=", "--settings-ui=false", "--telemetry=true"], cwd=panel_dir, check=True)
+    subprocess.run([
+        "php", "artisan", "p:environment:setup",
+        f"--author={author_email}",
+        "--url=http://localhost",
+        "--timezone=UTC",
+        "--cache=file",
+        "--session=file",
+        "--queue=redis",
+        "--redis-host=127.0.0.1",
+        "--redis-port=6379",
+        "--redis-pass=",
+        "--settings-ui=false",
+        "--telemetry=true"
+    ], cwd=panel_dir, check=True)
     subprocess.run(["php", "artisan", "p:environment:database", f"--host={db_host}", f"--port={db_port}", f"--database={db_name}", f"--username={db_user}", f"--password={db_pass}"], cwd=panel_dir, check=True)
     subprocess.run(["php", "artisan", "p:environment:mail", "--driver=smtp", "--email=no-reply@localhost", "--from=Pterodactyl Panel", "--host=localhost", "--port=25", "--username=", "--password=", "--encryption="], cwd=panel_dir, check=True)
     # 7. Миграция и админ
