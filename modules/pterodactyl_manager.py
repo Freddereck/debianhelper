@@ -524,20 +524,15 @@ def pterodactyl_install_wizard():
         db_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
         console.print(f"[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}")
         console.print(Panel(get_string("pterodactyl_manage_menu_db_socket_help"), title="Подсказка", border_style="cyan"))
-        use_socket = inquirer.confirm(message=get_string("pterodactyl_manage_menu_db_socket"), default=True).execute()
+        # Всегда используем только 127.0.0.1
+        use_socket = True
         sql = (
             f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; "
-            f"CREATE USER IF NOT EXISTS '{db_user}'@'localhost' IDENTIFIED BY '{db_pass}'; "
             f"CREATE DATABASE IF NOT EXISTS {db_name}; "
             f"GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; "
-            f"GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'localhost' WITH GRANT OPTION; "
             f"FLUSH PRIVILEGES;"
         )
-        if use_socket:
-            cmd = f"mariadb -u root --execute=\"{sql}\""
-        else:
-            root_pass = inquirer.text(message="Введите пароль root MariaDB:").execute()
-            cmd = f"mariadb -u root -p{root_pass} --execute=\"{sql}\""
+        cmd = f"mariadb -u root --execute=\"{sql}\""
         res = run_command_with_dpkg_fix(cmd, spinner_message="Создание БД и пользователя...")
         if res and res.returncode == 0:
             # Прописываем DB_HOST=127.0.0.1 в .env
@@ -782,6 +777,9 @@ def pterodactyl_install_wizard():
         test_result = test_db_connection(defaults['db_host'], defaults['db_user'], defaults['db_pass'], defaults['db_name'], defaults['db_port'])
         if test_result is True:
             break
+        # Если host не 127.0.0.1 — выводим явную подсказку
+        if defaults['db_host'] != '127.0.0.1':
+            console.print(Panel("[yellow]Внимание: рекомендуется использовать DB_HOST=127.0.0.1!\nВ MariaDB 'localhost' и '127.0.0.1' — это разные пользователи.\nПроверьте, что вы создали пользователя именно для 127.0.0.1 и используете этот host в .env.[/yellow]", title="Подсказка по DB_HOST", border_style="yellow"))
         console.print(Panel(f"[red]Не удалось подключиться к MariaDB:[/red]\n{test_result}", title="Ошибка подключения к БД", border_style="red"))
         console.print(Panel("Проверьте, что база данных и пользователь существуют, пароль указан верно, и доступ разрешён. Если пароль пустой — задайте его вручную или используйте сгенерированный!", title="Совет", border_style="yellow"))
         retry = inquirer.confirm(message="Ввести параметры БД вручную?", default=True).execute()
