@@ -18,7 +18,7 @@ import socket
 
 from localization import get_string
 from modules.panel_utils import clear_console, run_command, is_root
-from modules.pterodactyl_manager import pterodactyl_manage_menu
+from modules.pterodactyl_manager import main_menu
 
 console = Console()
 
@@ -821,7 +821,7 @@ def _show_actions_menu(key):
             if action is None or action == "action_back":
                 break
             if action == "manage":
-                pterodactyl_manage_menu()
+                main_menu()
                 break
         return
     # --- стандартное меню для остальных ---
