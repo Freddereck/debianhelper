@@ -869,6 +869,7 @@ def pterodactyl_install_wizard():
         admin_email = inquirer.text(message="Введите валидный email для администратора:", default=admin_email).execute()
     while not is_valid_username(admin_name):
         admin_name = inquirer.text(message="Введите username (латиница, цифры, -, _, .):", default=admin_name).execute()
+    admin_created = True
     while True:
         user_cmd = (
             f"cd /var/www/pterodactyl && php artisan p:user:make "
@@ -878,6 +879,7 @@ def pterodactyl_install_wizard():
         res = run_command_with_dpkg_fix(user_cmd, spinner_message="Создание администратора панели...")
         if res and res.returncode == 0 and ('User Created' in (res.stdout or '') or 'UUID' in (res.stdout or '')):
             console.print(Panel(f"[green]Администратор создан автоматически![/green]\n\n[cyan]Email:[/cyan] {admin_email}\n[cyan]Имя:[/cyan] {admin_name}\n[cyan]Пароль:[/cyan] {admin_pass}", title="Админ создан", border_style="green"))
+            admin_created = True
             break
         err = (res.stderr or res.stdout or "")
         if 'already been taken' in err:
@@ -897,15 +899,24 @@ def pterodactyl_install_wizard():
                 res2 = run_command_with_dpkg_fix(f"cd /var/www/pterodactyl && {tinker_cmd}", spinner_message="Сброс пароля администратора...")
                 if res2 and res2.returncode == 0:
                     console.print(Panel(f"[green]Пароль для {reset_email} успешно сброшен! Новый пароль: {new_pass}", title="Пароль сброшен", border_style="green"))
+                    admin_created = True
                 else:
                     console.print(Panel((res2.stderr or res2.stdout or "[red]Ошибка сброса пароля[/red]"), title="Ошибка сброса пароля", border_style="red"))
                 break
             else:
+                console.print("[yellow]Админ не будет создан автоматически. Вы сможете создать или сбросить пароль вручную позже.[/yellow]")
+                admin_created = False
                 break
         else:
             console.print(Panel(f"[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make --email={admin_email} --username={admin_name} --name-first={admin_name} --name-last={admin_name} --password={admin_pass} --admin=1[cyan]", title="Ручное создание админа", border_style="yellow"))
+            admin_created = False
             inquirer.text(message="Нажмите Enter, когда пользователь будет создан...").execute()
             break
+
+    # Если админ не создан, явно останавливаем установку и не удаляем панель/БД
+    if not admin_created:
+        console.print(Panel("[red]Администратор не был создан. Установка остановлена.\nПанель и база данных НЕ будут удалены![/red]", title="Ошибка установки", border_style="red"))
+        return
 
     # 16. Права на папку
     console.print(Panel("Установка прав на папку для www-data...", title="Шаг 15", border_style="yellow"))
@@ -1271,16 +1282,13 @@ def _remove_pterodactyl_db():
         try:
             conn = pymysql.connect(**pymysql_kwargs)
             with conn.cursor() as cur:
-                # Найти базы
                 cur.execute("SHOW DATABASES LIKE '%panel%';")
                 panel_dbs = [row[0] for row in cur.fetchall()]
                 cur.execute("SHOW DATABASES LIKE '%pterodactyl%';")
                 ptero_dbs = [row[0] for row in cur.fetchall()]
                 all_dbs = list(set(panel_dbs + ptero_dbs))
-                # Найти пользователей
                 cur.execute("SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%';")
                 users = cur.fetchall()
-                # Удаление баз
                 for db in all_dbs:
                     confirm = inquirer.confirm(message=f"Удалить базу данных {db}?", default=True).execute()
                     if confirm:
@@ -1289,7 +1297,6 @@ def _remove_pterodactyl_db():
                             console.print(f"[green]База данных {db} удалена.[/green]")
                         except Exception as e:
                             console.print(f"[yellow]Ошибка при удалении базы {db}: {e}[/yellow]")
-                # Удаление пользователей
                 for user, host in users:
                     confirm = inquirer.confirm(message=f"Удалить пользователя {user}@{host}?", default=True).execute()
                     if confirm:
@@ -1304,20 +1311,52 @@ def _remove_pterodactyl_db():
             return True
         except Exception as e:
             return e
-    # 1. Попытка через root без пароля
-    result = try_remove_db_and_users({'host': '127.0.0.1', 'user': 'root'})
-    if result is True:
-        return
-    # 2. Если ошибка доступа — спросить пароль
-    if isinstance(result, Exception) and 'Access denied' in str(result):
-        ask = inquirer.confirm(message="MariaDB требует пароль root. Ввести пароль?", default=True).execute()
-        if ask:
-            root_pass = inquirer.text(message="Введите пароль root MariaDB:").execute()
-            result2 = try_remove_db_and_users({'host': '127.0.0.1', 'user': 'root', 'password': root_pass})
+    # 1. Проверка подключения к MariaDB через socket (root без пароля)
+    try:
+        test_conn = pymysql.connect(host='127.0.0.1', user='root', connect_timeout=3)
+        test_conn.close()
+        result = try_remove_db_and_users({'host': '127.0.0.1', 'user': 'root'})
+        if result is True:
+            return
+    except Exception as e:
+        # Если нет доступа — не спрашиваем пароль, а сразу показываем инструкцию
+        console.print("[red]Нет доступа к MariaDB как root через socket.\nПопробуйте удалить базы и пользователей вручную через консоль MariaDB:[/red]")
+        console.print("""
+1. Войдите в MariaDB:
+   sudo mariadb
+2. Посмотрите базы:
+   SHOW DATABASES LIKE '%panel%';
+   SHOW DATABASES LIKE '%pterodactyl%';
+3. Удалите базы:
+   DROP DATABASE имя_базы;
+4. Посмотрите пользователей:
+   SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%';
+5. Удалите пользователей:
+   DROP USER 'пользователь'@'хост';
+6. FLUSH PRIVILEGES;
+""")
+        # --- Предложить создать временного пользователя для удаления, если нужно ---
+        create_temp = inquirer.confirm(message="Создать временного пользователя с правами root для удаления базы?", default=False).execute()
+        if create_temp:
+            temp_user = 'tempadmin'
+            temp_pass = ''.join(__import__('secrets').choice('abcdefghijklmnopqrstuvwxyz0123456789') for _ in range(12))
+            console.print(f"[yellow]Создайте пользователя вручную в MariaDB:[/yellow]\nCREATE USER '{temp_user}'@'127.0.0.1' IDENTIFIED BY '{temp_pass}';\nGRANT ALL PRIVILEGES ON *.* TO '{temp_user}'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;")
+            inquirer.text(message="Нажмите Enter после создания пользователя...").execute()
+            result2 = try_remove_db_and_users({'host': '127.0.0.1', 'user': temp_user, 'password': temp_pass})
             if result2 is True:
-                return
+                console.print("[green]Удаление выполнено через временного пользователя![/green]")
             else:
-                console.print(f"[yellow]Ошибка при удалении с паролем: {result2}[/yellow]")
+                console.print(f"[yellow]Ошибка при удалении с временным пользователем: {result2}[/yellow]")
+        return
+    # 2. Если ошибка доступа — спросить пароль (старый путь)
+    ask = inquirer.confirm(message="MariaDB требует пароль root. Ввести пароль?", default=True).execute()
+    if ask:
+        root_pass = inquirer.text(message="Введите пароль root MariaDB:").execute()
+        result2 = try_remove_db_and_users({'host': '127.0.0.1', 'user': 'root', 'password': root_pass})
+        if result2 is True:
+            return
+        else:
+            console.print(f"[yellow]Ошибка при удалении с паролем: {result2}[/yellow]")
     # 3. Если всё равно не удалось — показать инструкцию
     console.print("[red]Не удалось автоматически подключиться к MariaDB как root. Удалите базы и пользователей вручную через консоль MariaDB:[/red]")
     console.print("""
