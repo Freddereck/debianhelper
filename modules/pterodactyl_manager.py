@@ -2,6 +2,7 @@ import os
 import sys
 import shutil
 import socket
+import subprocess
 from InquirerPy import inquirer
 from rich.console import Console
 from rich.panel import Panel
@@ -23,7 +24,7 @@ def main_menu():
         choice = inquirer.select(
             message="=== Linux Helper: Менеджер Pterodactyl ===",
             choices=[
-                {"name": "Установить Pterodactyl", "value": "install"},
+                {"name": "Установить Pterodactyl (авто)", "value": "install_auto"},
                 {"name": "Удалить Pterodactyl", "value": "uninstall"},
                 {"name": "Диагностика окружения", "value": "diagnose"},
                 {"name": "Выход", "value": "exit"},
@@ -31,7 +32,7 @@ def main_menu():
             pointer="> ",
             instruction="Стрелки [36m[1m↑↓[0m, Enter — выбрать"
         ).execute()
-        if choice == "install":
+        if choice == "install_auto":
             panel_dir = "/var/www/pterodactyl"
             if os.path.exists(panel_dir):
                 confirm = inquirer.confirm(
@@ -40,11 +41,11 @@ def main_menu():
                 ).execute()
                 if confirm:
                     uninstall_pterodactyl(console)
-                    install_pterodactyl(console)
+                    install_pterodactyl_full_auto(console)
                 else:
                     continue
             else:
-                install_pterodactyl(console)
+                install_pterodactyl_full_auto(console)
         elif choice == "uninstall":
             panel_dir = "/var/www/pterodactyl"
             if not os.path.exists(panel_dir):
@@ -101,7 +102,6 @@ def diagnose_pterodactyl(console):
         console.print("[INFO] systemd unit pteroq.service не найден (будет создан при установке).")
     # Проверка крон-задачи
     try:
-        import subprocess
         res = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
         if '* * * * * php /var/www/pterodactyl/artisan schedule:run' in (res.stdout or ''):
             log("Крон-задача для artisan schedule:run найдена")
@@ -304,6 +304,98 @@ def install_pterodactyl(console):
     console.print(f"Пароль: {admin_pass}")
     console.print("Рекомендуется сменить пароль и email администратора после первого входа!")
     log("Установка панели завершена успешно")
+
+def install_pterodactyl_full_auto(console):
+    console.print(Panel("[bold cyan]Автоматическая установка Pterodactyl[/bold cyan]", title="Старт", border_style="cyan"))
+    check_root()
+    # 1. apt update и установка зависимостей
+    pkgs = [
+        "software-properties-common", "curl", "apt-transport-https", "ca-certificates", "gnupg",
+        "php8.3", "php8.3-common", "php8.3-cli", "php8.3-gd", "php8.3-mysql", "php8.3-mbstring", "php8.3-bcmath", "php8.3-xml", "php8.3-fpm", "php8.3-curl", "php8.3-zip",
+        "mariadb-server", "nginx", "tar", "unzip", "git", "redis-server"
+    ]
+    console.print("[cyan]Обновление apt и установка зависимостей...[/cyan]")
+    subprocess.run(["apt", "update"], check=True)
+    subprocess.run(["apt", "install", "-y"] + pkgs, check=True)
+    # Composer
+    if not shutil.which("composer"):
+        console.print("[cyan]Установка composer...[/cyan]")
+        subprocess.run("curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer", shell=True, check=True)
+    # 2. MariaDB: tempadmin если нужно
+    console.print("[cyan]Проверка MariaDB и создание пользователя...[/cyan]")
+    # Проверяем auth_socket
+    auth_socket = False
+    try:
+        out = subprocess.check_output(["sudo", "mariadb", "-e", "SELECT plugin FROM mysql.user WHERE User='root';"]).decode()
+        if "auth_socket" in out:
+            auth_socket = True
+    except Exception:
+        pass
+    db_name = "panel"
+    db_user = "pterodactyl"
+    db_pass = generate_password(16)
+    db_host = "127.0.0.1"
+    db_port = 3306
+    tempadmin = False
+    tempadmin_user = "tempadmin"
+    tempadmin_pass = generate_password(16)
+    if auth_socket:
+        console.print("[yellow]MariaDB использует auth_socket. Создаю временного пользователя tempadmin...[/yellow]")
+        sql = f"CREATE USER IF NOT EXISTS '{tempadmin_user}'@'127.0.0.1' IDENTIFIED BY '{tempadmin_pass}'; GRANT ALL PRIVILEGES ON *.* TO '{tempadmin_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;"
+        subprocess.run(["sudo", "mariadb", "-e", sql], check=True)
+        tempadmin = True
+    # Создаём пользователя и базу для панели
+    sql = f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; CREATE DATABASE IF NOT EXISTS {db_name}; GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; FLUSH PRIVILEGES;"
+    if tempadmin:
+        subprocess.run(["mariadb", "-u", tempadmin_user, f"-p{tempadmin_pass}", "-e", sql], check=True)
+    else:
+        subprocess.run(["sudo", "mariadb", "-e", sql], check=True)
+    console.print(Panel(f"БД и пользователь созданы: [green]{db_name}[/green] / [green]{db_user}[/green]", title="MariaDB", border_style="green"))
+    # 3. Скачивание и распаковка панели
+    panel_dir = "/var/www/pterodactyl"
+    if not os.path.exists(panel_dir):
+        os.makedirs(panel_dir, exist_ok=True)
+    console.print("[cyan]Скачивание и распаковка панели...[/cyan]")
+    subprocess.run(["curl", "-Lo", f"{panel_dir}/panel.tar.gz", "https://github.com/pterodactyl/panel/releases/latest/download/panel.tar.gz"], check=True)
+    subprocess.run(["tar", "-xzvf", f"{panel_dir}/panel.tar.gz", "-C", panel_dir], check=True)
+    subprocess.run(["chmod", "-R", "755", f"{panel_dir}/storage", f"{panel_dir}/bootstrap/cache/"], check=True)
+    # 4. Composer install
+    subprocess.run(["composer", "install", "--no-dev", "--optimize-autoloader"], cwd=panel_dir, check=True)
+    # 5. .env и ключ
+    env_path = os.path.join(panel_dir, ".env")
+    env_example = os.path.join(panel_dir, ".env.example")
+    if not os.path.exists(env_path) and os.path.exists(env_example):
+        shutil.copy(env_example, env_path)
+    # Записываем параметры БД
+    update_env_file(env_path, {
+        "DB_HOST": db_host,
+        "DB_PORT": str(db_port),
+        "DB_DATABASE": db_name,
+        "DB_USERNAME": db_user,
+        "DB_PASSWORD": db_pass
+    })
+    subprocess.run(["php", "artisan", "key:generate", "--force"], cwd=panel_dir, check=True)
+    # 6. Artisan setup
+    subprocess.run(["php", "artisan", "p:environment:setup", "--author=admin@localhost", "--url=http://localhost", "--timezone=UTC", "--cache=file", "--session=file", "--queue=redis", "--redis-host=127.0.0.1", "--redis-port=6379", "--redis-pass=", "--settings-ui=false", "--telemetry=true"], cwd=panel_dir, check=True)
+    subprocess.run(["php", "artisan", "p:environment:database", f"--host={db_host}", f"--port={db_port}", f"--database={db_name}", f"--username={db_user}", f"--password={db_pass}"], cwd=panel_dir, check=True)
+    subprocess.run(["php", "artisan", "p:environment:mail", "--driver=smtp", "--email=no-reply@localhost", "--from=Pterodactyl Panel", "--host=localhost", "--port=25", "--username=", "--password=", "--encryption="], cwd=panel_dir, check=True)
+    # 7. Миграция и админ
+    subprocess.run(["php", "artisan", "migrate", "--seed", "--force"], cwd=panel_dir, check=True)
+    admin_email = "admin@localhost"
+    admin_user = "admin"
+    admin_pass = generate_password(12)
+    subprocess.run(["php", "artisan", "p:user:make", f"--email={admin_email}", f"--username={admin_user}", f"--name-first=Admin", f"--name-last=Admin", f"--password={admin_pass}", f"--admin=1"], cwd=panel_dir, check=True)
+    # 8. Права
+    subprocess.run(["chown", "-R", "www-data:www-data", panel_dir], check=True)
+    # 9. Systemd unit
+    setup_systemd_pteroq(panel_dir)
+    # 10. Крон
+    setup_cron(panel_dir)
+    # 11. Nginx
+    setup_nginx(panel_dir)
+    # 12. Финал
+    console.print(Panel(f"[bold green]Установка завершена![/bold green]\nПанель: http://localhost (или ваш домен)\nЛогин: {admin_email}\nПароль: {admin_pass}", title="Готово!", border_style="green"))
+    log("Автоматическая установка панели завершена успешно")
 
 def uninstall_pterodactyl(console):
     console.print("\n[Удаление Pterodactyl Panel]")
