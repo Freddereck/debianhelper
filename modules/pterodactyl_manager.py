@@ -99,9 +99,8 @@ def _get_pterodactyl_info():
                     f.write(line)
         console.print(Panel(f"[green]APP_URL в .env автоматически исправлен на https://{domain}!\nПерезапускаю nginx и php-fpm...[/green]", title="APP_URL исправлен", border_style="green"))
         # Перезапуск сервисов
-        import subprocess
-        subprocess.run(['systemctl', 'restart', 'nginx'])
-        subprocess.run(['systemctl', 'restart', 'php8.3-fpm'])
+        run_command_with_dpkg_fix('systemctl restart nginx')
+        run_command_with_dpkg_fix('systemctl restart php8.3-fpm')
         # Обновить app_url для дальнейшего использования
         app_url = f'https://{domain}'
     # Если ssl=True, а APP_URL не https — предупреждение
@@ -251,9 +250,8 @@ def pterodactyl_manage_menu():
                         else:
                             f.write(line)
             # Перезапуск сервисов
-            import subprocess
-            subprocess.run(['systemctl', 'restart', 'nginx'])
-            subprocess.run(['systemctl', 'restart', 'php8.3-fpm'])
+            run_command_with_dpkg_fix('systemctl restart nginx')
+            run_command_with_dpkg_fix('systemctl restart php8.3-fpm')
             console.print(Panel(f"[green]Домен панели изменён на {new_domain}! nginx и php-fpm перезапущены.[/green]", title="Домен изменён", border_style="green"))
             inquirer.text(message="Нажмите Enter для возврата в меню...").execute()
             continue
@@ -277,8 +275,7 @@ def pterodactyl_manage_menu():
                         console.print(Panel(f"[red]Не удалось получить SSL-сертификат для {domain}![/red]", title="Ошибка Let's Encrypt", border_style="red"))
             # После создания/проверки сертификата — перегенерировать nginx-конфиг с ssl=True
             _ensure_nginx_pterodactyl(domain=domain, ssl=True)
-            import subprocess
-            subprocess.run(['systemctl', 'restart', 'nginx'])
+            run_command_with_dpkg_fix("systemctl restart nginx", spinner_message="Перезапуск nginx")
             console.print(Panel(f"[green]nginx сконфигурирован для SSL и перезапущен![/green]", title="nginx", border_style="green"))
             inquirer.text(message="Нажмите Enter для возврата в меню...").execute()
             continue
@@ -1086,6 +1083,7 @@ def _create_pteroq_unit():
     pteroq_unit = '''[Unit]
 Description=Pterodactyl Queue Worker
 After=redis-server.service
+
 [Service]
 User=www-data
 Group=www-data
@@ -1094,15 +1092,16 @@ ExecStart=/usr/bin/php /var/www/pterodactyl/artisan queue:work --queue=high,stan
 StartLimitInterval=180
 StartLimitBurst=30
 RestartSec=5s
+
 [Install]
 WantedBy=multi-user.target
 '''
     unit_path = '/etc/systemd/system/pteroq.service'
     with open(unit_path, 'w') as f:
         f.write(pteroq_unit)
-    subprocess.run(['systemctl', 'daemon-reload'])
-    subprocess.run(['systemctl', 'enable', '--now', 'pteroq.service'])
-    console.print('[green]systemd unit pteroq создан и запущен![/green]') 
+    run_command_with_dpkg_fix('systemctl daemon-reload')
+    run_command_with_dpkg_fix('systemctl enable --now pteroq.service')
+    console.print('[green]systemd unit pteroq создан и запущен![/green]')
 
 def test_db_connection(host, user, password, db, port=3306):
     try:
@@ -1184,9 +1183,8 @@ def _is_port_free(port):
                 else:
                     f.write(line)
         console.print(Panel(f"[green]APP_TIMEZONE в .env автоматически исправлен на {tz_choice}!\nПерезапускаю nginx и php-fpm...[/green]", title="APP_TIMEZONE исправлен", border_style="green"))
-        import subprocess
-        subprocess.run(['systemctl', 'restart', 'nginx'])
-        subprocess.run(['systemctl', 'restart', 'php8.3-fpm'])
+        run_command_with_dpkg_fix('systemctl restart nginx')
+        run_command_with_dpkg_fix('systemctl restart php8.3-fpm')
 
 def _diagnose_ssl(domain):
     import subprocess
@@ -1265,75 +1263,13 @@ def pterodactyl_full_uninstall():
         if os.path.exists(cert_path):
             subprocess.run(['certbot', 'delete', '--cert-name', domain, '--non-interactive', '--quiet'])
             subprocess.run(['rm', '-rf', f'/etc/letsencrypt/live/{domain}', f'/etc/letsencrypt/archive/{domain}', f'/etc/letsencrypt/renewal/{domain}.conf'])
-    # 5. Удалить базу данных и пользователя + все связанные данные
-    try:
-        import pymysql
-        # Получить параметры подключения из .env, если есть
-        db_user = db_pass = db_name = db_host = db_port = None
-        if os.path.exists(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    if line.startswith('DB_USERNAME='):
-                        db_user = line.strip().split('=',1)[1]
-                    elif line.startswith('DB_PASSWORD='):
-                        db_pass = line.strip().split('=',1)[1]
-                    elif line.startswith('DB_DATABASE='):
-                        db_name = line.strip().split('=',1)[1]
-                    elif line.startswith('DB_HOST='):
-                        db_host = line.strip().split('=',1)[1]
-                    elif line.startswith('DB_PORT='):
-                        db_port = int(line.strip().split('=',1)[1])
-        # Подключение к MariaDB как root (через socket)
-        conn = None
-        try:
-            conn = pymysql.connect(host=db_host or '127.0.0.1', user='root', connect_timeout=3)
-        except Exception:
-            # Если не удалось — пробуем без host
-            try:
-                conn = pymysql.connect(user='root', connect_timeout=3)
-            except Exception:
-                pass
-        if conn:
-            with conn.cursor() as cur:
-                # Удалить все базы, содержащие 'panel' или 'pterodactyl' в имени
-                cur.execute("SHOW DATABASES;")
-                all_dbs = [row[0] for row in cur.fetchall()]
-                for db in all_dbs:
-                    if 'panel' in db or 'pterodactyl' in db:
-                        try:
-                            cur.execute(f"DROP DATABASE IF EXISTS `{db}`;")
-                            console.print(f"[green]База данных {db} удалена.[/green]")
-                        except Exception as e:
-                            console.print(f"[yellow]Ошибка при удалении базы {db}: {e}[/yellow]")
-                # Удалить всех пользователей, начинающихся на 'pterodactyl' или 'admin'
-                cur.execute("SELECT User, Host FROM mysql.user WHERE User LIKE 'pterodactyl%' OR User LIKE 'admin%';")
-                users = cur.fetchall()
-                for user, host in users:
-                    try:
-                        cur.execute(f"DROP USER IF EXISTS '{user}'@'{host}';")
-                        console.print(f"[green]Пользователь {user}@{host} удалён.[/green]")
-                    except Exception as e:
-                        console.print(f"[yellow]Ошибка при удалении пользователя {user}@{host}: {e}[/yellow]")
-                cur.execute("FLUSH PRIVILEGES;")
-            conn.commit()
-            conn.close()
-        # Также пробуем удалить пользователей из таблицы users, если база осталась
-        if db_user and db_pass and db_name and db_host and db_port:
-            try:
-                conn2 = pymysql.connect(host=db_host, user=db_user, password=db_pass, database=db_name, port=int(db_port), connect_timeout=3)
-                with conn2.cursor() as cur2:
-                    cur2.execute("DELETE FROM users WHERE email LIKE 'admin%' OR username LIKE 'admin%' OR email LIKE 'pterodactyl%' OR username LIKE 'pterodactyl%';")
-                    conn2.commit()
-                    console.print("[green]Все записи пользователей admin/pterodactyl удалены из таблицы users.[/green]")
-                conn2.close()
-            except Exception:
-                pass
-    except Exception as e:
-        console.print(f"[yellow]Ошибка при глубокой очистке базы: {e}[/yellow]")
+    # 5. Интерактивное удаление базы данных и пользователей
+    console.print(Panel("[yellow]Переходим к удалению базы данных и пользователей Pterodactyl...[/yellow]", title="Удаление БД", border_style="yellow"))
+    _remove_pterodactyl_db()
     # 6. Перезапустить nginx
     subprocess.run(['systemctl', 'reload', 'nginx'])
     # 7. Сообщение
-    console.print(Panel("[green]Pterodactyl и все связанные файлы, сертификаты, базы, пользователи и данные удалены![/green]", title="Удаление завершено", border_style="green"))
+    console.print(Panel("[green]Pterodactyl и все связанные файлы, сертификаты, базы, пользователи и данные удалены (или предложены к удалению вручную)![/green]", title="Удаление завершено", border_style="green"))
     inquirer.text(message="Нажмите Enter для выхода...").execute()
 
 # --- Удаление базы данных и пользователя Pterodactyl ---
