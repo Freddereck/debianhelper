@@ -2,6 +2,9 @@ import os
 import sys
 import shutil
 import socket
+from InquirerPy import inquirer
+from rich.console import Console
+from rich.panel import Panel
 from modules.utils.db_utils import MariaDBManager
 from modules.utils.logger import log
 from modules.utils.pterodactyl_utils import (
@@ -10,28 +13,52 @@ from modules.utils.pterodactyl_utils import (
     remove_systemd_pteroq, remove_cron, remove_nginx, remove_panel_files, remove_db_user_and_db
 )
 
+console = Console()
+
 # TODO: main_menu(), install_pterodactyl(), uninstall_pterodactyl(), diagnose_pterodactyl()
 # Весь старый код удалён. Будет реализована новая архитектура.
 
 def main_menu():
-    print("\n=== Linux Helper: Менеджер Pterodactyl ===\n")
-    print("1. Установить Pterodactyl")
-    print("2. Удалить Pterodactyl")
-    print("3. Диагностика окружения")
-    print("4. Выход")
-    choice = input("Выберите действие: ").strip()
-    if choice == '1':
-        install_pterodactyl()
-    elif choice == '2':
-        uninstall_pterodactyl()
-    elif choice == '3':
-        diagnose_pterodactyl()
-    else:
-        print("Выход.")
-        sys.exit(0)
+    while True:
+        choice = inquirer.select(
+            message="=== Linux Helper: Менеджер Pterodactyl ===",
+            choices=[
+                {"name": "Установить Pterodactyl", "value": "install"},
+                {"name": "Удалить Pterodactyl", "value": "uninstall"},
+                {"name": "Диагностика окружения", "value": "diagnose"},
+                {"name": "Выход", "value": "exit"},
+            ],
+            pointer="> ",
+            instruction="Стрелки [36m[1m↑↓[0m, Enter — выбрать"
+        ).execute()
+        if choice == "install":
+            panel_dir = "/var/www/pterodactyl"
+            if os.path.exists(panel_dir):
+                confirm = inquirer.confirm(
+                    message="Панель уже установлена. Удалить и установить заново?",
+                    default=False
+                ).execute()
+                if confirm:
+                    uninstall_pterodactyl(console)
+                    install_pterodactyl(console)
+                else:
+                    continue
+            else:
+                install_pterodactyl(console)
+        elif choice == "uninstall":
+            panel_dir = "/var/www/pterodactyl"
+            if not os.path.exists(panel_dir):
+                console.print(Panel("Панель уже удалена или не установлена.", title="Инфо", border_style="cyan"))
+            else:
+                uninstall_pterodactyl(console)
+        elif choice == "diagnose":
+            diagnose_pterodactyl(console)
+        else:
+            console.print("[bold green]Выход.[/bold green]")
+            sys.exit(0)
 
-def diagnose_pterodactyl():
-    print("\n[Диагностика окружения Pterodactyl]")
+def diagnose_pterodactyl(console):
+    console.print("\n[Диагностика окружения Pterodactyl]")
     log("Старт диагностики окружения")
     check_root()
     # Проверка зависимостей
@@ -51,7 +78,7 @@ def diagnose_pterodactyl():
         if not check_dependency(cmd, name):
             all_ok = False
     if not all_ok:
-        print("[ОШИБКА] Установите все зависимости и повторите диагностику!")
+        console.print("[ОШИБКА] Установите все зависимости и повторите диагностику!")
         return
     # Проверка портов
     for port in [80, 443]:
@@ -60,44 +87,44 @@ def diagnose_pterodactyl():
     panel_dir = "/var/www/pterodactyl"
     if os.path.exists(panel_dir):
         log(f"Директория панели {panel_dir} найдена")
-        print(f"[OK] Директория панели {panel_dir} найдена.")
+        console.print(f"[OK] Директория панели {panel_dir} найдена.")
     else:
         log(f"Директория панели {panel_dir} не найдена, будет создана при установке")
-        print(f"[INFO] Директория панели {panel_dir} будет создана при установке.")
+        console.print(f"[INFO] Директория панели {panel_dir} будет создана при установке.")
     # Проверка systemd unit pteroq
     pteroq_unit = "/etc/systemd/system/pteroq.service"
     if os.path.exists(pteroq_unit):
         log("systemd unit pteroq.service найден")
-        print("[OK] systemd unit pteroq.service найден.")
+        console.print("[OK] systemd unit pteroq.service найден.")
     else:
         log("systemd unit pteroq.service не найден")
-        print("[INFO] systemd unit pteroq.service не найден (будет создан при установке).")
+        console.print("[INFO] systemd unit pteroq.service не найден (будет создан при установке).")
     # Проверка крон-задачи
     try:
         import subprocess
         res = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
         if '* * * * * php /var/www/pterodactyl/artisan schedule:run' in (res.stdout or ''):
             log("Крон-задача для artisan schedule:run найдена")
-            print("[OK] Крон-задача для artisan schedule:run найдена.")
+            console.print("[OK] Крон-задача для artisan schedule:run найдена.")
         else:
             log("Крон-задача для artisan schedule:run не найдена")
-            print("[INFO] Крон-задача для artisan schedule:run не найдена (будет добавлена при установке).")
+            console.print("[INFO] Крон-задача для artisan schedule:run не найдена (будет добавлена при установке).")
     except Exception as e:
         log(f"Ошибка при проверке крон-задачи: {e}", level="ERROR")
-        print("[ВНИМАНИЕ] Не удалось проверить крон-задачи.")
+        console.print("[ВНИМАНИЕ] Не удалось проверить крон-задачи.")
     # Проверка nginx-конфига
     nginx_conf = "/etc/nginx/sites-available/pterodactyl.conf"
     if os.path.exists(nginx_conf):
         log("nginx-конфиг найден")
-        print("[OK] nginx-конфиг найден.")
+        console.print("[OK] nginx-конфиг найден.")
     else:
         log("nginx-конфиг не найден")
-        print("[INFO] nginx-конфиг не найден (будет создан при установке).")
-    print("\n[Диагностика завершена]")
+        console.print("[INFO] nginx-конфиг не найден (будет создан при установке).")
+    console.print("\n[Диагностика завершена]")
     log("Диагностика завершена")
 
-def install_pterodactyl():
-    print("\n[Установка Pterodactyl Panel]")
+def install_pterodactyl(console):
+    console.print("\n[Установка Pterodactyl Panel]")
     log("Старт установки панели")
     check_root()
     # Проверка зависимостей
@@ -117,7 +144,7 @@ def install_pterodactyl():
         if not check_dependency(cmd, name):
             all_ok = False
     if not all_ok:
-        print("[ОШИБКА] Установите все зависимости и повторите установку!")
+        console.print("[ОШИБКА] Установите все зависимости и повторите установку!")
         return
     # Проверка портов
     for port in [80, 443]:
@@ -125,12 +152,12 @@ def install_pterodactyl():
     # Скачивание и распаковка панели
     panel_dir = "/var/www/pterodactyl"
     if os.path.exists(panel_dir):
-        print(f"[INFO] Директория {panel_dir} уже существует. Пропускаю скачивание.")
+        console.print(f"[INFO] Директория {panel_dir} уже существует. Пропускаю скачивание.")
         log(f"Директория {panel_dir} уже существует")
     else:
         download_and_extract_panel(panel_dir)
     # Установка composer-зависимостей
-    print("[INFO] Установка зависимостей composer...")
+    console.print("[INFO] Установка зависимостей composer...")
     log("Установка зависимостей composer...")
     os.system(f"cd {panel_dir} && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader")
     # Копирование .env
@@ -138,29 +165,61 @@ def install_pterodactyl():
     env_example = os.path.join(panel_dir, ".env.example")
     if not os.path.exists(env_path) and os.path.exists(env_example):
         shutil.copy(env_example, env_path)
-        print("[OK] .env создан из .env.example")
+        console.print("[OK] .env создан из .env.example")
         log(".env создан из .env.example")
     # Генерация ключа приложения
-    print("[INFO] Генерация ключа приложения...")
+    console.print("[INFO] Генерация ключа приложения...")
     log("Генерация ключа приложения...")
     os.system(f"cd {panel_dir} && php artisan key:generate --force")
-    print("[OK] Базовая установка файлов завершена. Продолжаю...")
+    console.print("[OK] Базовая установка файлов завершена. Продолжаю...")
     log("Базовая установка файлов завершена")
     # --- Автоматизация создания БД и пользователя ---
-    print("[INFO] Создание базы данных и пользователя...")
+    console.print("[INFO] Создание базы данных и пользователя...")
     db_name = "panel"
     db_user = "pterodactyl"
     db_pass = generate_password(16)
     db_host = "127.0.0.1"
     db_port = 3306
+    # Попытка через root без пароля
     mariadb = MariaDBManager(db_host, "root", None, db_port)
     ok, err = mariadb.create_user_and_db(db_name, db_user, db_pass)
-    if not ok:
-        print(f"[ОШИБКА] Не удалось создать БД/пользователя: {err}")
+    if not ok and err and '1698' in str(err):
+        console.print("[ОШИБКА] MariaDB не даёт доступ root через пароль (auth_socket).\n" \
+              "\nРешение: создайте временного пользователя с правами root.\n" \
+              "\n1. Откройте терминал и выполните:\n" \
+              "   sudo mariadb\n" \
+              "2. Введите команды (замените password на свой сложный пароль):\n" \
+              "   CREATE USER 'tempadmin'@'127.0.0.1' IDENTIFIED BY 'password';\n" \
+              "   GRANT ALL PRIVILEGES ON *.* TO 'tempadmin'@'127.0.0.1' WITH GRANT OPTION;\n" \
+              "   FLUSH PRIVILEGES;\n" \
+              "3. Вернитесь к установке и введите логин/пароль MariaDB ниже.\n")
+        log("MariaDB требует временного пользователя с правами root (auth_socket)", level="ERROR")
+        while True:
+            login = input("MariaDB логин (например, tempadmin): ").strip()
+            passwd = input("MariaDB пароль: ").strip()
+            if not login or not passwd:
+                console.print("[ОШИБКА] Логин и пароль не могут быть пустыми!")
+                continue
+            mariadb = MariaDBManager(db_host, login, passwd, db_port)
+            ok, err = mariadb.create_user_and_db(db_name, db_user, db_pass)
+            if ok:
+                console.print(f"[OK] БД и пользователь созданы: {db_name}, {db_user}")
+                log(f"БД и пользователь созданы: {db_name}, {db_user}")
+                break
+            else:
+                console.print(f"[ОШИБКА] Не удалось создать БД/пользователя: {err}")
+                log(f"Не удалось создать БД/пользователя: {err}", level="ERROR")
+                retry = input("Попробовать снова? (y/n): ").strip().lower()
+                if retry != 'y':
+                    console.print("[ОШИБКА] Установка прервана. Создайте БД и пользователя вручную.")
+                    return
+    elif not ok:
+        console.print(f"[ОШИБКА] Не удалось создать БД/пользователя: {err}")
         log(f"Не удалось создать БД/пользователя: {err}", level="ERROR")
         return
-    print(f"[OK] БД и пользователь созданы: {db_name}, {db_user}")
-    log(f"БД и пользователь созданы: {db_name}, {db_user}")
+    else:
+        console.print(f"[OK] БД и пользователь созданы: {db_name}, {db_user}")
+        log(f"БД и пользователь созданы: {db_name}, {db_user}")
     # --- Запись параметров в .env ---
     update_env_file(env_path, {
         "DB_HOST": db_host,
@@ -169,19 +228,19 @@ def install_pterodactyl():
         "DB_USERNAME": db_user,
         "DB_PASSWORD": db_pass
     })
-    print("[OK] Параметры БД записаны в .env")
+    console.print("[OK] Параметры БД записаны в .env")
     log("Параметры БД записаны в .env")
     # --- Проверка подключения к БД ---
     mariadb2 = MariaDBManager(db_host, db_user, db_pass, db_port)
     ok, err = mariadb2.test_connection(db_name)
     if not ok:
-        print(f"[ОШИБКА] Не удалось подключиться к БД: {err}")
+        console.print(f"[ОШИБКА] Не удалось подключиться к БД: {err}")
         log(f"Не удалось подключиться к БД: {err}", level="ERROR")
         return
-    print("[OK] Подключение к БД успешно!")
+    console.print("[OK] Подключение к БД успешно!")
     log("Подключение к БД успешно!")
     # --- Artisan setup (окружение, база, почта) ---
-    print("[INFO] Настройка окружения панели...")
+    console.print("[INFO] Настройка окружения панели...")
     run_artisan(panel_dir, "p:environment:setup", [
         f"--author=admin@localhost",
         f"--url=http://localhost",
@@ -213,10 +272,10 @@ def install_pterodactyl():
         f"--encryption=",
     ])
     # --- Миграция и seed ---
-    print("[INFO] Миграция и заполнение базы...")
+    console.print("[INFO] Миграция и заполнение базы...")
     run_artisan(panel_dir, "migrate", ["--seed", "--force"])
     # --- Создание первого администратора ---
-    print("[INFO] Создание администратора...")
+    console.print("[INFO] Создание администратора...")
     admin_email = f"admin@localhost"
     admin_user = "admin"
     admin_pass = generate_password(12)
@@ -228,10 +287,10 @@ def install_pterodactyl():
         f"--password={admin_pass}",
         f"--admin=1"
     ])
-    print(f"[OK] Администратор создан: {admin_email} / {admin_pass}")
+    console.print(f"[OK] Администратор создан: {admin_email} / {admin_pass}")
     log(f"Администратор создан: {admin_email}")
     # --- Права на папки ---
-    print("[INFO] Установка прав на папки...")
+    console.print("[INFO] Установка прав на папки...")
     os.system(f"chown -R www-data:www-data {panel_dir}")
     # --- Systemd unit pteroq ---
     setup_systemd_pteroq(panel_dir)
@@ -239,15 +298,15 @@ def install_pterodactyl():
     setup_cron(panel_dir)
     # --- Nginx ---
     setup_nginx(panel_dir)
-    print("\n[Установка завершена!]")
-    print(f"Панель доступна по адресу: http://localhost (или ваш домен)")
-    print(f"Логин: {admin_email}")
-    print(f"Пароль: {admin_pass}")
-    print("Рекомендуется сменить пароль и email администратора после первого входа!")
+    console.print("\n[Установка завершена!]")
+    console.print(f"Панель доступна по адресу: http://localhost (или ваш домен)")
+    console.print(f"Логин: {admin_email}")
+    console.print(f"Пароль: {admin_pass}")
+    console.print("Рекомендуется сменить пароль и email администратора после первого входа!")
     log("Установка панели завершена успешно")
 
-def uninstall_pterodactyl():
-    print("\n[Удаление Pterodactyl Panel]")
+def uninstall_pterodactyl(console):
+    console.print("\n[Удаление Pterodactyl Panel]")
     log("Старт удаления панели")
     check_root()
     panel_dir = "/var/www/pterodactyl"
@@ -266,7 +325,7 @@ def uninstall_pterodactyl():
             remove_db_user_and_db(**db_params)
     # 5. Удалить файлы панели
     remove_panel_files(panel_dir)
-    print("[OK] Удаление завершено. Все компоненты панели удалены.")
+    console.print("[OK] Удаление завершено. Все компоненты панели удалены.")
     log("Удаление панели завершено успешно")
 
 if __name__ == "__main__":
