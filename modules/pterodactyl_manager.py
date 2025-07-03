@@ -515,51 +515,54 @@ def pterodactyl_install_wizard():
 
     # 10. Инструкция/автоматизация по созданию БД
     console.print(Panel(get_string("pterodactyl_db_step_panel"), title="Шаг 9: База данных", border_style="yellow"))
-    auto_db = inquirer.confirm(message=get_string("pterodactyl_manage_menu_db_auto"), default=True).execute()
-    if auto_db:
-        import secrets
-        import string
-        db_user = "pterodactyl"
-        db_name = "panel"
-        db_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
-        console.print(f"[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}")
-        console.print(Panel(get_string("pterodactyl_manage_menu_db_socket_help"), title="Подсказка", border_style="cyan"))
-        # Всегда используем только 127.0.0.1
-        use_socket = True
-        sql = (
-            f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; "
-            f"CREATE DATABASE IF NOT EXISTS {db_name}; "
-            f"GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; "
-            f"FLUSH PRIVILEGES;"
-        )
-        cmd = f"mariadb -u root --execute=\"{sql}\""
-        res = run_command_with_dpkg_fix(cmd, spinner_message="Создание БД и пользователя...")
-        if res and res.returncode == 0:
-            # Прописываем DB_HOST=127.0.0.1 в .env
-            env_path = '/var/www/pterodactyl/.env'
-            if os.path.exists(env_path):
-                lines = []
-                with open(env_path) as f:
-                    for line in f:
-                        if line.startswith('DB_HOST='):
-                            lines.append('DB_HOST=127.0.0.1\n')
-                        elif line.startswith('DB_PASSWORD='):
-                            lines.append(f'DB_PASSWORD={db_pass}\n')
-                        elif line.startswith('DB_USERNAME='):
-                            lines.append(f'DB_USERNAME={db_user}\n')
-                        elif line.startswith('DB_DATABASE='):
-                            lines.append(f'DB_DATABASE={db_name}\n')
-                        else:
-                            lines.append(line)
-                with open(env_path, 'w') as f:
-                    f.writelines(lines)
-            console.print(Panel(f"[green]База данных и пользователь успешно созданы![green]\n\n[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}\n\n[bold yellow]Сохраните эти параметры![bold yellow]", title="БД создана", border_style="green"))
-        else:
-            console.print(Panel(f"[red]Ошибка автоматического создания БД![red]\n\nПопробуйте выполнить шаг вручную.\n\n[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[cyan]\n\n[cyan]CREATE USER '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}';\nCREATE DATABASE {db_name};\nGRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;\nexit[cyan]", title="Ошибка создания БД", border_style="red"))
-            inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
-    else:
-        console.print(Panel("[bold]Пример для MariaDB:[/bold]\n\n[cyan]mariadb -u root -p[cyan]\n\n[cyan]CREATE USER 'pterodactyl'@'127.0.0.1' IDENTIFIED BY 'yourPassword';\nCREATE DATABASE panel;\nGRANT ALL PRIVILEGES ON panel.* TO 'pterodactyl'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;\nexit[cyan]\n\n[bold yellow]Скопируйте команды выше и выполните их в отдельном терминале![bold yellow]", title="Ручное создание БД", border_style="yellow"))
-        inquirer.text(message="Нажмите Enter, когда база данных будет готова...").execute()
+    # --- Жёстко фиксируем DB_HOST=127.0.0.1 ---
+    db_user = "pterodactyl"
+    db_name = "panel"
+    import secrets
+    import string
+    db_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(16))
+    db_host = "127.0.0.1"
+    db_port = "3306"
+    console.print(f"[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}\n[cyan]Хост:[/cyan] {db_host}")
+    sql = (
+        f"CREATE USER IF NOT EXISTS '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}'; "
+        f"CREATE DATABASE IF NOT EXISTS {db_name}; "
+        f"GRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION; "
+        f"FLUSH PRIVILEGES;"
+    )
+    cmd = f"mariadb -u root --execute=\"{sql}\""
+    res = run_command_with_dpkg_fix(cmd, spinner_message="Создание БД и пользователя...")
+    # --- Всегда прописываем DB_HOST=127.0.0.1 в .env ---
+    env_path = '/var/www/pterodactyl/.env'
+    if os.path.exists(env_path):
+        lines = []
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith('DB_HOST='):
+                    lines.append('DB_HOST=127.0.0.1\n')
+                elif line.startswith('DB_PORT='):
+                    lines.append(f'DB_PORT={db_port}\n')
+                elif line.startswith('DB_DATABASE='):
+                    lines.append(f'DB_DATABASE={db_name}\n')
+                elif line.startswith('DB_USERNAME='):
+                    lines.append(f'DB_USERNAME={db_user}\n')
+                elif line.startswith('DB_PASSWORD='):
+                    lines.append(f'DB_PASSWORD={db_pass}\n')
+                else:
+                    lines.append(line)
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+    # --- Проверка подключения к БД ---
+    import pymysql
+    try:
+        conn = pymysql.connect(host=db_host, user=db_user, password=db_pass, database=db_name, port=int(db_port), connect_timeout=3)
+        conn.close()
+        console.print(Panel(f"[green]База данных и пользователь успешно созданы и проверены!\n\n[cyan]Имя БД:[/cyan] {db_name}\n[cyan]Пользователь:[/cyan] {db_user}\n[cyan]Пароль:[/cyan] {db_pass}\n[cyan]Хост:[/cyan] {db_host}\n\n[bold yellow]Сохраните эти параметры![bold yellow]", title="БД создана", border_style="green"))
+    except Exception as e:
+        console.print(Panel(f"[red]Ошибка подключения к MariaDB после создания пользователя![/red]\n\n{e}", title="Ошибка подключения к БД", border_style="red"))
+        console.print(Panel(f"[bold]Проверьте вручную:[/bold]\n\n[cyan]mariadb -u root[cyan]\n\n[cyan]CREATE USER '{db_user}'@'127.0.0.1' IDENTIFIED BY '{db_pass}';\nCREATE DATABASE {db_name};\nGRANT ALL PRIVILEGES ON {db_name}.* TO '{db_user}'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;\nexit[cyan]", title="Проверьте SQL вручную", border_style="yellow"))
+        inquirer.text(message="Нажмите Enter после ручной проверки...").execute()
+        return
 
     # 11. Установка зависимостей через composer
     console.print(Panel("Установка зависимостей через composer...", title="Шаг 10", border_style="yellow"))
