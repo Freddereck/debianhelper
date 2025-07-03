@@ -220,11 +220,14 @@ def _install_certbot():
 def _show_github_access_menu():
     clear_console()
     console.print(Panel(get_string("webserver_github_access_title"), border_style="blue"))
+    # --- Новое пояснение ---
+    console.print("[bold yellow]Внимание![/bold yellow] [white]Для доступа к приватным репозиториям GitHub вы можете использовать либо SSH-ключ, либо персональный токен. Это разные вещи![/white]\n\n[bold]SSH-ключ[/bold] — используется для SSH-доступа (git@github.com:...). Его нужно добавить в GitHub → Settings → SSH and GPG keys.\n[bold]Токен[/bold] — используется для HTTPS-доступа (https://github.com/...). Его нужно создать в GitHub → Settings → Developer settings → Personal access tokens.\n[red]Нельзя вставлять токен в поле для SSH-ключа и наоборот![/red]\n")
     choices = [
-        Choice("show_ssh", name=get_string("webserver_github_show_ssh")),
+        Choice("show_ssh", name="Показать SSH-ключ для GitHub (скопируйте и добавьте в SSH keys)"),
+        Choice("show_token_help", name="Как получить и использовать токен (HTTPS)?"),
         Choice("back", name=get_string("webserver_github_back")),
     ]
-    action = inquirer.select(message=get_string("webserver_github_access_prompt"), choices=choices, vi_mode=True).execute()
+    action = inquirer.select(message="Выберите действие:", choices=choices, vi_mode=True).execute()
     if action == "show_ssh":
         ssh_path = os.path.expanduser("~/.ssh/id_rsa.pub")
         if not os.path.exists(ssh_path):
@@ -233,9 +236,13 @@ def _show_github_access_menu():
             subprocess.run(["ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "", "-f", ssh_path[:-4]])
         with open(ssh_path) as f:
             pubkey = f.read().strip()
-        console.print(Panel(pubkey, title=get_string("webserver_github_ssh_pubkey_title"), border_style="green"))
-        console.print(get_string("webserver_github_ssh_instructions"))
+        console.print(Panel(pubkey, title="Ваш публичный SSH-ключ (скопируйте полностью)", border_style="green"))
+        console.print("[cyan]Скопируйте этот ключ и добавьте его в GitHub → Settings → SSH and GPG keys. Не используйте его как токен![/cyan]")
         inquirer.text(message=get_string("press_enter_to_continue")).execute()
+    elif action == "show_token_help":
+        console.print(Panel("[bold]Токен GitHub[/bold] — это строка вида [italic]ghp_xxx...[/italic], которую вы создаёте на GitHub в разделе Settings → Developer settings → Personal access tokens.\n\n[green]Токен используется только для HTTPS-доступа к приватным репозиториям![/green]\n\nКогда скрипт попросит токен, просто вставьте его в поле. Не пытайтесь вставлять токен в поле для SSH-ключа на GitHub — это вызовет ошибку!\n\n[bold yellow]Как получить токен:[/bold yellow]\n1. Перейдите на GitHub → Settings → Developer settings → Personal access tokens.\n2. Нажмите Generate new token, выберите нужные права (repo).\n3. Скопируйте токен (начинается с ghp_...) и вставьте его в скрипт при запросе.\n", title="Инструкция по токену GitHub", border_style="cyan"))
+        inquirer.text(message=get_string("press_enter_to_continue")).execute()
+    # back — ничего не делаем
 
 def _setup_nginx_proxy(project_name, project_dir, port=3000, domain=None):
     # Проверка наличия nginx

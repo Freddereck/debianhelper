@@ -1,3 +1,4 @@
+InquirerPy
 questionary
 rich
 python-crontab
