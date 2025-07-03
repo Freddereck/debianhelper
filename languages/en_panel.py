@@ -63,4 +63,5 @@ def get_strings():
         "smtp_info_text": "SMTP is a protocol for sending mail. It is needed so the panel can send emails (for example, for password recovery, notifications, etc.). If you do not have your own SMTP server, you can use mail services (Gmail, Yandex, Mail.ru, corporate mail, etc.). For testing, you can specify fake data, but emails will not be sent. For production, use real SMTP data (server address, port, login, password, encryption type).",
         "csrf_info_title": "CSRF token mismatch error",
         "csrf_info_text": "CSRF error occurs if APP_URL in .env does not match the address you use to access the panel. Make sure APP_URL matches the address in your browser, use https if configured, clear cookies, and restart nginx/php-fpm after changing .env.",
+        "java_display_name": "Java (OpenJDK)",
     } 

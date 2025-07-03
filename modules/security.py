@@ -8,10 +8,23 @@ from rich.table import Table
 from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
 from InquirerPy.separator import Separator
+from rich.panel import Panel
+import datetime
 
 from localization import get_string
 
 console = Console()
+
+# --- Пояснения к параметрам SSH ---
+SSH_PARAM_EXPLANATIONS = {
+    "PermitRootLogin": get_string("ssh_param_explain_permitroot"),
+    "PasswordAuthentication": get_string("ssh_param_explain_passwordauth"),
+    "Protocol": get_string("ssh_param_explain_protocol"),
+    "X11Forwarding": get_string("ssh_param_explain_x11"),
+}
+
+CHKROOTKIT_LOG_PATH = "/var/log/chkrootkit.log"
+LYNIS_LOG_PATH = "/var/log/lynis.log"
 
 def _check_and_install_utility(utility_name, package_name):
     """Checks if a utility is installed and prompts to install it if not."""
@@ -160,23 +173,36 @@ def check_ssh_config():
         table.add_column("Status", justify="center")
         table.add_column("Recommendation", justify="left")
 
-        # 1. PermitRootLogin
-        status, rec = _check_ssh_param(config, r"^\s*PermitRootLogin\s+(yes|no|prohibit-password)", ['no', 'prohibit-password'], "param_permit_root_login")
-        table.add_row(status, rec)
-
-        # 2. PasswordAuthentication
-        status, rec = _check_ssh_param(config, r"^\s*PasswordAuthentication\s+(yes|no)", ['no'], "param_password_auth")
-        table.add_row(status, rec)
-
-        # 3. Protocol
-        status, rec = _check_ssh_param(config, r"^\s*Protocol\s+([12,]+)", ['2'], "param_protocol_2")
-        table.add_row(status, rec)
-        
-        # 4. X11Forwarding
-        status, rec = _check_ssh_param(config, r"^\s*X11Forwarding\s+(yes|no)", ['no'], "param_x11_forwarding")
-        table.add_row(status, rec)
+        # Для сбора уязвимостей
+        vulnerabilities = []
+        param_names = ["PermitRootLogin", "PasswordAuthentication", "Protocol", "X11Forwarding"]
+        param_keys = [
+            (r"^\s*PermitRootLogin\s+(yes|no|prohibit-password)", ['no', 'prohibit-password'], "param_permit_root_login", "PermitRootLogin"),
+            (r"^\s*PasswordAuthentication\s+(yes|no)", ['no'], "param_password_auth", "PasswordAuthentication"),
+            (r"^\s*Protocol\s+([12,]+)", ['2'], "param_protocol_2", "Protocol"),
+            (r"^\s*X11Forwarding\s+(yes|no)", ['no'], "param_x11_forwarding", "X11Forwarding"),
+        ]
+        for param_regex, good_values, recommendation_key, param_name in param_keys:
+            status, rec = _check_ssh_param(config, param_regex, good_values, recommendation_key)
+            # Явное выделение уязвимости
+            if status.strip().lower() in ("[bold red]плохо[/bold red]", "[bold red]bad[/bold red]"):
+                status = "[bold red]ОПАСНО[/bold red]"
+                vulnerabilities.append(param_name)
+            table.add_row(status, rec)
 
         console.print(table)
+
+        # Если есть уязвимости — показать отдельный блок
+        if vulnerabilities:
+            vuln_list = "\n".join(f"- [red]{p}[/red]: {SSH_PARAM_EXPLANATIONS.get(p, '')}" for p in vulnerabilities)
+            console.print(f"\n[bold red]Обнаружены критические уязвимости в настройках SSH:[/bold red]\n{vuln_list}")
+        else:
+            console.print("[green]Критических уязвимостей SSH не обнаружено![/green]")
+
+        # Пояснения ко всем параметрам
+        console.print("\n[bold]Пояснения к параметрам:[/bold]")
+        for p, expl in SSH_PARAM_EXPLANATIONS.items():
+            console.print(f"[cyan]{p}[/cyan]: {expl}")
 
     except PermissionError:
         console.print(get_string("ssh_permission_err", path=ssh_config_path_str))
@@ -196,13 +222,67 @@ def check_for_rootkits():
     try:
         console.print(get_string("running_chkrootkit"))
         result = subprocess.run(['chkrootkit'], capture_output=True, text=True, check=True)
-        console.print(get_string("chkrootkit_results"))
-        console.print(result.stdout)
-        if result.stderr:
-            console.print("[yellow]Stderr:[/yellow]")
-            console.print(result.stderr)
+        output = result.stdout
+        # Сохраняем лог
+        with open(CHKROOTKIT_LOG_PATH, 'w') as f:
+            f.write(output)
+        # Анализируем вывод
+        infected = []
+        suspicious = []
+        for line in output.splitlines():
+            if "INFECTED" in line or "Possible rootkit" in line:
+                infected.append(line)
+            elif any(w in line for w in ["suspicious", "Suspicious", "Warning"]):
+                suspicious.append(line)
+        if infected:
+            console.print(f"[bold red]{get_string('chkrootkit_found_threats')}[/bold red]")
+            for l in infected:
+                console.print(f"[red]{l}[/red]")
+        elif suspicious:
+            console.print(f"[yellow]{get_string('chkrootkit_found_suspicious')}[/yellow]")
+            for l in suspicious:
+                console.print(f"[yellow]{l}[/yellow]")
+        else:
+            console.print(f"[green]{get_string('chkrootkit_no_threats')}[/green]")
+        console.print(f"[grey]{get_string('chkrootkit_log_saved', path=CHKROOTKIT_LOG_PATH)}[/grey]")
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         console.print(get_string("chkrootkit_error", e=e))
+
+# --- Просмотр логов chkrootkit и lynis ---
+def show_chkrootkit_log():
+    if not os.path.exists(CHKROOTKIT_LOG_PATH):
+        console.print("[yellow]Лог chkrootkit не найден.[/yellow]")
+        return
+    with open(CHKROOTKIT_LOG_PATH) as f:
+        log = f.read()
+    console.print(Panel(log, title="chkrootkit.log", border_style="grey37"))
+    inquirer.text(message=get_string("press_enter_to_continue")).execute()
+
+def show_lynis_log():
+    if not os.path.exists(LYNIS_LOG_PATH):
+        console.print("[yellow]Лог Lynis не найден.[/yellow]")
+        return
+    with open(LYNIS_LOG_PATH) as f:
+        log = f.read()
+    console.print(Panel(log, title="lynis.log", border_style="grey37"))
+    inquirer.text(message=get_string("press_enter_to_continue")).execute()
+
+# --- Локализация и понятный вывод для Lynis ---
+LYNIS_SUGGESTION_LOCALIZED = {
+    "SSH-7408": {
+        "title": get_string("lynis_suggestion_SSH-7408_title"),
+        "what": get_string("lynis_suggestion_SSH-7408_what"),
+        "action": get_string("lynis_suggestion_SSH-7408_action"),
+        "risk": get_string("lynis_suggestion_SSH-7408_risk"),
+    },
+    "DEB-0880": {
+        "title": get_string("lynis_suggestion_DEB-0880_title"),
+        "what": get_string("lynis_suggestion_DEB-0880_what"),
+        "action": get_string("lynis_suggestion_DEB-0880_action"),
+        "risk": get_string("lynis_suggestion_DEB-0880_risk"),
+    },
+    # ... добавить другие популярные ID ...
+}
 
 def run_lynis_audit():
     """Runs a comprehensive system audit using Lynis and displays a structured summary."""
@@ -214,25 +294,20 @@ def run_lynis_audit():
         console.print(get_string("need_root_warning"))
         return
 
-    report_path = Path(f"/tmp/lynis-report.{os.getpid()}.dat")
-    
+    report_path = Path(LYNIS_LOG_PATH)
     try:
         with console.status(get_string("running_lynis")):
-            # Run Lynis quietly, capturing all output
             process = subprocess.run(
                 ['lynis', 'audit', 'system', '--quiet', '--report-file', str(report_path)],
                 capture_output=True, text=True
             )
-        
         if process.returncode != 0 and not report_path.exists():
              console.print("[red]Lynis failed to run. Details:[/red]")
              console.print(process.stderr)
              return
-
         if not report_path.exists():
             console.print(f"[red]Lynis report file not found at {report_path}[/red]")
             return
-        
         report_data = {}
         with open(report_path, 'r') as f:
             for line in f:
@@ -245,11 +320,8 @@ def run_lynis_audit():
                         report_data[key_name].append(value)
                     else:
                         report_data[key] = value
-
-        # Display summary table
         warnings_count = len(report_data.get('warning', []))
         suggestions_count = len(report_data.get('suggestion', []))
-
         summary_table = Table(title=get_string("lynis_summary_title"))
         summary_table.add_column("Metric", style="magenta")
         summary_table.add_column("Value", style="bold")
@@ -257,39 +329,36 @@ def run_lynis_audit():
         summary_table.add_row(get_string("lynis_tests_done"), report_data.get("tests_done", "N/A"))
         summary_table.add_row(get_string("lynis_warnings"), f"[yellow]{warnings_count}[/yellow]")
         summary_table.add_row(get_string("lynis_suggestions"), f"[cyan]{suggestions_count}[/cyan]")
-        summary_table.add_row(get_string("lynis_report_file"), report_data.get('report_file_location', "/var/log/lynis.log"))
+        summary_table.add_row(get_string("lynis_report_file"), str(report_path))
         console.print(summary_table)
-
-        # Display suggestions in a structured table
+        # --- Локализованный и понятный вывод предложений ---
         suggestions = report_data.get('suggestion', [])
         if suggestions:
             console.print(f"\n[bold cyan]{get_string('lynis_suggestions_title')}[/bold cyan]")
-            suggestions_table = Table(show_header=True, header_style="bold magenta", box=None)
-            suggestions_table.add_column(get_string("lynis_suggestion_id"))
-            suggestions_table.add_column(get_string("lynis_suggestion_details"))
-            suggestions_table.add_column(get_string("lynis_suggestion_action"))
-
             for sug in suggestions:
                 parts = sug.split('|')
                 if len(parts) >= 4:
                     sug_id, details, _, action = parts[0], parts[1], parts[2], parts[3]
-                    suggestions_table.add_row(f"[cyan]{sug_id}[/cyan]", details, action)
-            
-            console.print(suggestions_table)
-
+                    loc = LYNIS_SUGGESTION_LOCALIZED.get(sug_id)
+                    if loc:
+                        console.print(f"[red]{loc['title']}[/red]")
+                        console.print(f"  - {get_string('lynis_what')}: {loc['what']}")
+                        console.print(f"  - {get_string('lynis_action')}: {loc['action']}")
+                        console.print(f"  - {get_string('lynis_risk')}: {loc['risk']}")
+                    else:
+                        console.print(f"[yellow]{sug_id}: {details}[/yellow]")
+                        console.print(f"  - {get_string('lynis_action')}: {action}")
+                        console.print(f"  - {get_string('lynis_no_localization')}")
+        else:
+            console.print("[green]Нет предложений по усилению безопасности![/green]")
+        console.print(f"[grey]{get_string('lynis_log_saved', path=str(report_path))}[/grey]")
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         console.print(get_string("lynis_error", e=e))
-    finally:
-        # Clean up the report file
-        if report_path.exists():
-            report_path.unlink()
 
 def run_security_analysis():
     """Displays the security analysis sub-menu and runs the selected tool."""
-    
     if os.geteuid() != 0:
         console.print(get_string("need_root_warning"))
-
     while True:
         choice = inquirer.select(
             message=get_string("security_menu_prompt"),
@@ -298,7 +367,9 @@ def run_security_analysis():
                 Choice(value="ssh", name=get_string("ssh_config_option")),
                 Choice(value="updates", name=get_string("system_updates_option")),
                 Choice(value="rootkit", name=get_string("rootkit_check_option")),
+                Choice(value="chkrootkit_log", name=get_string("chkrootkit_log_menu")),
                 Choice(value="lynis", name=get_string("lynis_audit_option")),
+                Choice(value="lynis_log", name=get_string("lynis_log_menu")),
                 Separator(),
                 Choice(value="back", name=get_string("back_to_main_menu")),
             ],
@@ -306,10 +377,8 @@ def run_security_analysis():
             pointer="» ",
             instruction=" ",
         ).execute()
-
         if choice == "back" or choice is None:
             break
-            
         try:
             if choice == "ports":
                 check_open_ports()
@@ -319,12 +388,13 @@ def run_security_analysis():
                 check_system_updates()
             elif choice == "rootkit":
                 check_for_rootkits()
+            elif choice == "chkrootkit_log":
+                show_chkrootkit_log()
             elif choice == "lynis":
                 run_lynis_audit()
-            
-            # Pause to allow user to see the output
+            elif choice == "lynis_log":
+                show_lynis_log()
             inquirer.text(message="\n" + get_string("press_enter_to_continue"), vi_mode=True).execute()
         except KeyboardInterrupt:
             console.print(f'\n{get_string("operation_cancelled")}')
-            # Loop will continue, presenting the menu again
             pass 

@@ -283,6 +283,43 @@ def _handle_install(key):
         ))
         inquirer.text(message="Нажмите Enter для продолжения...").execute()
 
+    # --- Особая логика для Java: выбор версии ---
+    if key == "java":
+        java_versions = [
+            ("openjdk-8-jdk", "OpenJDK 8 (LTS, legacy)"),
+            ("openjdk-11-jdk", "OpenJDK 11 (LTS)"),
+            ("openjdk-17-jdk", "OpenJDK 17 (LTS, рекомендуемая)"),
+            ("openjdk-21-jdk", "OpenJDK 21 (LTS, latest)")
+        ]
+        version_choice = inquirer.select(
+            message="Выберите версию Java для установки:",
+            choices=[Choice(v[0], name=v[1]) for v in java_versions],
+            vi_mode=True
+        ).execute()
+        if not version_choice:
+            console.print("[yellow]Установка Java отменена.[/yellow]")
+            return
+        package_name = version_choice
+        # Устанавливаем выбранную версию
+        res = run_command(
+            f"DEBIAN_FRONTEND=noninteractive apt-get install -y {package_name}",
+            get_string("installing", package=get_string("java_display_name"))
+        )
+        if res and res.returncode == 0:
+            console.print(get_string("install_success", package=get_string("java_display_name")))
+            # Сохраняем путь к java
+            java_path = shutil.which("java")
+            if java_path:
+                with open(JAVA_PATH_CONFIG, 'w') as f:
+                    f.write(java_path.strip())
+                console.print(f"[green]Java установлена: {java_path}[/green]")
+        else:
+            console.print(get_string("install_fail", package=get_string("java_display_name")))
+            if res:
+                console.print(Panel(res.stderr, title="[red]Error Details[/red]", border_style="red"))
+        inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
+        return
+
     # --- Custom Install Command ---
     if "install_cmd" in data:
         try:
@@ -496,24 +533,34 @@ def _handle_uninstall(key):
 def _handle_version_check(key):
     data = SUPPORTED_SOFTWARE[key]
     try:
-        res = run_command(data['version_cmd'].split(), spinner_message=f"Checking version for {data['display_name']}...")
+        # Особая обработка для Java: выводит версию в stderr
+        if key == "java":
+            res = run_command(data['version_cmd'].split(), spinner_message=f"Checking version for {data['display_name']}...")
+            version_out = (res.stdout or "") + ("\n" + res.stderr if res and res.stderr else "")
+            version_out = version_out.strip()
+            if not version_out:
+                version_out = "[red]Не удалось получить версию Java[/red]"
+            console.print(Panel(f"[bold cyan]{get_string('version_info', package=data['display_name'])}[/bold cyan]\n\n{version_out}", title="Version", border_style="cyan"))
+        else:
+            res = run_command(data['version_cmd'].split(), spinner_message=f"Checking version for {data['display_name']}...")
+            if res and res.returncode == 0:
+                console.print(Panel(f"[bold cyan]{get_string('version_info', package=data['display_name'])}[/bold cyan]\n\n{res.stdout.strip()}", title="Version", border_style="cyan"))
+            else:
+                err_out = (res.stderr or '') + '\n' + (res.stdout or '') if res else ''
+                console.print(Panel(err_out.strip() or '[red]Не удалось получить версию[/red]', title="[red]Ошибка версии[/red]", border_style="red"))
+                if key in ("webmin", "pterodactyl", "wings"):
+                    doc_links = {
+                        "webmin": "https://www.webmin.com/",
+                        "pterodactyl": "https://pterodactyl.io/panel/1.11/getting_started.html",
+                        "wings": "https://pterodactyl.io/wings/1.11/installing.html"
+                    }
+                    console.print(Panel(f"[yellow]Проверьте документацию: {doc_links[key]}[/yellow]", title="[yellow]Что делать?[/yellow]", border_style="yellow"))
+            inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
+            return
     except FileNotFoundError as e:
         console.print(Panel(f"[red]Команда не найдена: {e}[/red]", title="[red]Ошибка версии[/red]", border_style="red"))
         inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
         return
-    if res and res.returncode == 0:
-        console.print(Panel(f"[bold cyan]{get_string('version_info', package=data['display_name'])}[/bold cyan]\n\n{res.stdout.strip()}", title="Version", border_style="cyan"))
-    else:
-        err_out = (res.stderr or '') + '\n' + (res.stdout or '') if res else ''
-        console.print(Panel(err_out.strip() or '[red]Не удалось получить версию[/red]', title="[red]Ошибка версии[/red]", border_style="red"))
-        if key in ("webmin", "pterodactyl", "wings"):
-            doc_links = {
-                "webmin": "https://www.webmin.com/",
-                "pterodactyl": "https://pterodactyl.io/panel/1.11/getting_started.html",
-                "wings": "https://pterodactyl.io/wings/1.11/installing.html"
-            }
-            console.print(Panel(f"[yellow]Проверьте документацию: {doc_links[key]}[/yellow]", title="[yellow]Что делать?[/yellow]", border_style="yellow"))
-        inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
 
 def _show_service_menu(key):
     """Shows the service management menu for a package."""
