@@ -854,7 +854,16 @@ def pterodactyl_install_wizard():
     # 15. Автоматизация создания первого пользователя
     import secrets
     import string
-    admin_email = f"admin@{domain if 'domain' in locals() else 'localhost'}"
+    # Получаем домен из APP_URL
+    env_path = '/var/www/pterodactyl/.env'
+    panel_domain = 'localhost'
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith('APP_URL='):
+                    panel_domain = line.strip().split('=',1)[1].replace('https://','').replace('http://','').split(':')[0]
+                    break
+    admin_email = f"admin@{panel_domain}"
     admin_name = "admin"
     admin_pass = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
     # Проверка валидности email и username
@@ -867,50 +876,55 @@ def pterodactyl_install_wizard():
         admin_email = inquirer.text(message="Введите валидный email для администратора:", default=admin_email).execute()
     while not is_valid_username(admin_name):
         admin_name = inquirer.text(message="Введите username (латиница, цифры, -, _, .):", default=admin_name).execute()
-    admin_created = True
+    admin_created = False
     while True:
-        user_cmd = (
-            f"cd /var/www/pterodactyl && php artisan p:user:make "
-            f"--email={admin_email} --username={admin_name} --name-first={admin_name} "
-            f"--name-last={admin_name} --password={admin_pass} --admin=1"
-        )
-        res = run_command_with_dpkg_fix(user_cmd, spinner_message="Создание администратора панели...")
-        if res and res.returncode == 0 and ('User Created' in (res.stdout or '') or 'UUID' in (res.stdout or '')):
+        # Используем cwd вместо cd ... && ...
+        artisan_args = [
+            'php', 'artisan', 'p:user:make',
+            f'--email={admin_email}',
+            f'--username={admin_name}',
+            f'--name-first={admin_name}',
+            f'--name-last={admin_name}',
+            f'--password={admin_pass}',
+            '--admin=1'
+        ]
+        res = run_command_with_dpkg_fix(artisan_args, spinner_message="Создание администратора панели...", cwd="/var/www/pterodactyl")
+        if res and res.returncode == 0:
             console.print(Panel(f"[green]Администратор создан автоматически![/green]\n\n[cyan]Email:[/cyan] {admin_email}\n[cyan]Имя:[/cyan] {admin_name}\n[cyan]Пароль:[/cyan] {admin_pass}", title="Админ создан", border_style="green"))
             admin_created = True
             break
         err = (res.stderr or res.stdout or "")
         if 'already been taken' in err:
             console.print(Panel(f"[yellow]Пользователь с email {admin_email} или username {admin_name} уже существует![/yellow]", title="Админ уже есть", border_style="yellow"))
-            action = inquirer.select(message="Что сделать?", choices=["Ввести другой email/username", "Сбросить пароль для существующего пользователя", "Пропустить"], default="Ввести другой email/username").execute()
-            if action == "Ввести другой email/username":
-                admin_email = inquirer.text(message="Введите уникальный email:", default=admin_email).execute()
-                admin_name = inquirer.text(message="Введите уникальный username:", default=admin_name).execute()
-                continue
-            elif action == "Сбросить пароль для существующего пользователя":
+            action = inquirer.select(message="Что сделать?", choices=["Сбросить пароль для существующего пользователя", "Ввести другой email/username", "Пропустить"], default="Сбросить пароль для существующего пользователя").execute()
+            if action == "Сбросить пароль для существующего пользователя":
                 reset_email = inquirer.text(message="Email пользователя для сброса пароля:", default=admin_email).execute()
                 new_pass = inquirer.text(message="Новый пароль:", default=admin_pass).execute()
-                # Сбросить пароль через tinker
-                tinker_cmd = (
-                    f"php artisan tinker --execute=\"$user = \\Pterodactyl\\Models\\User::where('email', '{reset_email}')->first(); $user->password = bcrypt('{new_pass}'); $user->save();\""
-                )
-                res2 = run_command_with_dpkg_fix(f"cd /var/www/pterodactyl && {tinker_cmd}", spinner_message="Сброс пароля администратора...")
+                tinker_cmd = [
+                    'php', 'artisan', 'tinker',
+                    '--execute', f"$user = \\Pterodactyl\\Models\\User::where('email', '{reset_email}')->first(); $user->password = bcrypt('{new_pass}'); $user->save();"
+                ]
+                res2 = run_command_with_dpkg_fix(tinker_cmd, spinner_message="Сброс пароля администратора...", cwd="/var/www/pterodactyl")
                 if res2 and res2.returncode == 0:
                     console.print(Panel(f"[green]Пароль для {reset_email} успешно сброшен! Новый пароль: {new_pass}", title="Пароль сброшен", border_style="green"))
                     admin_created = True
                 else:
                     console.print(Panel((res2.stderr or res2.stdout or "[red]Ошибка сброса пароля[/red]"), title="Ошибка сброса пароля", border_style="red"))
                 break
+            elif action == "Ввести другой email/username":
+                admin_email = inquirer.text(message="Введите уникальный email:", default=admin_email).execute()
+                admin_name = inquirer.text(message="Введите уникальный username:", default=admin_name).execute()
+                continue
             else:
                 console.print("[yellow]Админ не будет создан автоматически. Вы сможете создать или сбросить пароль вручную позже.[/yellow]")
                 admin_created = False
                 break
         else:
-            console.print(Panel(f"[yellow]Не удалось создать администратора автоматически. Запустите вручную:[/yellow]\n\n[cyan]cd /var/www/pterodactyl\nphp artisan p:user:make --email={admin_email} --username={admin_name} --name-first={admin_name} --name-last={admin_name} --password={admin_pass} --admin=1[cyan]", title="Ручное создание админа", border_style="yellow"))
+            # Выводим подробную ошибку artisan
+            console.print(Panel(f"[red]Не удалось создать администратора автоматически.\n\nОшибка artisan:[/red]\n{err}\n\n[cyan]Попробуйте создать пользователя вручную или сбросить пароль через tinker.[/cyan]", title="Ручное создание админа", border_style="red"))
             admin_created = False
             inquirer.text(message="Нажмите Enter, когда пользователь будет создан...").execute()
             break
-
     # Если админ не создан, явно останавливаем установку и не удаляем панель/БД
     if not admin_created:
         console.print(Panel("[red]Администратор не был создан. Установка остановлена.\nПанель и база данных НЕ будут удалены![/red]", title="Ошибка установки", border_style="red"))
