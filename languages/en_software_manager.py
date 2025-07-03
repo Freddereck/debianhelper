@@ -58,13 +58,6 @@ def get_strings():
         "webmin_restart_required": "[yellow]Restart Webmin to apply changes![/yellow]",
         "webmin_settings_back": "Back to Webmin",
 
-        # Pterodactyl
-        "pterodactyl_description": "Pterodactyl is a free open-source panel for managing game servers (Minecraft, CS:GO, Rust, etc.) via a beautiful web UI. All servers are isolated in Docker containers. More: https://pterodactyl.io/project/introduction.html",
-        "pterodactyl_manage_menu": "Pterodactyl Panel Management",
-        "pterodactyl_open_panel": "Open Pterodactyl Web Panel",
-        "pterodactyl_add_server": "Add Game Server (via web interface)",
-        "pterodactyl_diagnose_and_install": "Diagnose and Auto-Install Pterodactyl",
-
         # Java diagnostics
         "java_not_found": "Java not found in the system!",
         "java_found_in_path": "Java found in PATH: {path}",
@@ -74,15 +67,4 @@ def get_strings():
         "java_manual_path_success": "Java path saved: {path}",
         "java_manual_path_fail": "[red]Could not find or run java at the specified path.[/red]",
         "java_diagnostics_title": "Java Diagnostics",
-
-        # Wings
-        "wings_description": "Wings is the agent (daemon) for running game servers managed by the Pterodactyl panel. Requires Docker. More: https://pterodactyl.io/wings/1.11/installing.html",
-        "wings_manage_menu": "Wings (Pterodactyl) Management",
-        "wings_open_docs": "Open Wings Documentation",
-        "wings_connect_guide": "To connect Wings to the Pterodactyl panel, follow the guide at https://pterodactyl.io/wings/1.11/installing.html. After installation, add a node in the panel and use the token for authorization.",
-        "wings_status": "Wings Status",
-        "wings_start": "Start Wings",
-        "wings_stop": "Stop Wings",
-        "wings_restart": "Restart Wings",
-        "wings_remove": "Remove Wings",
     } 

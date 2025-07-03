@@ -18,7 +18,6 @@ import socket
 
 from localization import get_string
 from modules.panel_utils import clear_console, run_command, is_root
-from modules.pterodactyl_manager import main_menu
 
 console = Console()
 
@@ -182,16 +181,6 @@ echo "---------------"
         "install_cmd": "wget -qO- http://www.webmin.com/jcameron-key.asc | apt-key add - && echo 'deb http://download.webmin.com/download/repository sarge contrib' > /etc/apt/sources.list.d/webmin.list && apt-get update && apt-get install -y webmin",
         "uninstall_cmd": "apt-get purge -y webmin && rm -rf /etc/webmin /var/webmin",
         "show_output_on_success": True
-    },
-    "pterodactyl": {
-        "display_name": "Pterodactyl (панель для игровых серверов)",
-        "version_cmd": "cd /var/www/pterodactyl && php artisan --version",
-        "is_installed_check": lambda: os.path.exists('/var/www/pterodactyl'),
-    },
-    "wings": {
-        "display_name": "Wings (Pterodactyl Node)",
-        "version_cmd": "/usr/local/bin/wings --version",
-        "is_installed_check": lambda: shutil.which('wings') is not None or os.path.exists('/usr/local/bin/wings'),
     },
 }
 
@@ -391,12 +380,6 @@ def _handle_install(key):
             console.print(Panel(res.stderr, title="[red]Error Details[/red]", border_style="red"))
     
     inquirer.text(message=get_string("press_enter_to_continue", lang="ru")).execute()
-
-    if key == 'pterodactyl':
-        console.print(Panel(get_string('pterodactyl_description'), title='Pterodactyl', border_style='blue'))
-        confirm = inquirer.confirm(message=get_string('uninstall_confirm', package='Pterodactyl')).execute()
-        if not confirm:
-            return
 
 def _handle_uninstall(key):
     data = SUPPORTED_SOFTWARE[key]
@@ -801,29 +784,6 @@ def _show_3xui_menu():
 def _show_actions_menu(key):
     data = SUPPORTED_SOFTWARE[key]
     is_installed = _is_package_installed(key)
-    # --- Спец. обработка для Pterodactyl ---
-    if key == 'pterodactyl':
-        while True:
-            clear_console()
-            status_markup = get_string("status_installed") if is_installed else get_string("status_not_installed")
-            status_text = strip_rich_markup(status_markup)
-            title = f"{data['display_name']} - [{status_text}]"
-            console.print(Panel(title, style="bold blue"))
-            choices = [
-                Choice("manage", name=get_string("action_manage_service")),
-                Choice(None, name=get_string("action_back")),
-            ]
-            action = inquirer.select(
-                message=get_string("actions_prompt", package=data['display_name']),
-                choices=choices,
-                vi_mode=True
-            ).execute()
-            if action is None or action == "action_back":
-                break
-            if action == "manage":
-                main_menu()
-                break
-        return
     # --- стандартное меню для остальных ---
     while True:
         try:
