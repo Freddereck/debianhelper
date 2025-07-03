@@ -862,6 +862,8 @@ def pterodactyl_install_wizard():
             for line in f:
                 if line.startswith('APP_URL='):
                     panel_domain = line.strip().split('=',1)[1].replace('https://','').replace('http://','').split(':')[0]
+                    # Очищаем домен от кавычек и пробелов
+                    panel_domain = panel_domain.replace('"', '').replace("'", '').strip()
                     break
     admin_email = f"admin@{panel_domain}"
     admin_name = "admin"
@@ -873,6 +875,7 @@ def pterodactyl_install_wizard():
     def is_valid_username(username):
         return re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]$", username)
     while not is_valid_email(admin_email):
+        console.print(Panel(f"[red]Email администратора невалиден: {admin_email}[/red]", title="Ошибка email", border_style="red"))
         admin_email = inquirer.text(message="Введите валидный email для администратора:", default=admin_email).execute()
     while not is_valid_username(admin_name):
         admin_name = inquirer.text(message="Введите username (латиница, цифры, -, _, .):", default=admin_name).execute()
@@ -1301,7 +1304,7 @@ def _remove_pterodactyl_db():
                 cur.execute("SHOW DATABASES LIKE '%pterodactyl%';")
                 ptero_dbs = [row[0] for row in cur.fetchall()]
                 all_dbs = list(set(panel_dbs + ptero_dbs))
-                cur.execute("SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%';")
+                cur.execute("SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%' OR User LIKE '%admin%' OR User LIKE '%tempadmin%';")
                 users = cur.fetchall()
                 for db in all_dbs:
                     confirm = inquirer.confirm(message=f"Удалить базу данных {db}?", default=True).execute()
@@ -1333,7 +1336,6 @@ def _remove_pterodactyl_db():
         if result is True:
             return
     except Exception as e:
-        # Если нет доступа — не спрашиваем пароль, а сразу показываем инструкцию
         console.print("[red]Нет доступа к MariaDB как root через socket.\nПопробуйте удалить базы и пользователей вручную через консоль MariaDB:[/red]")
         console.print("""
 1. Войдите в MariaDB:
@@ -1344,7 +1346,7 @@ def _remove_pterodactyl_db():
 3. Удалите базы:
    DROP DATABASE имя_базы;
 4. Посмотрите пользователей:
-   SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%';
+   SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%' OR User LIKE '%admin%' OR User LIKE '%tempadmin%';
 5. Удалите пользователей:
    DROP USER 'пользователь'@'хост';
 6. FLUSH PRIVILEGES;
@@ -1354,13 +1356,21 @@ def _remove_pterodactyl_db():
         if create_temp:
             temp_user = 'tempadmin'
             temp_pass = ''.join(__import__('secrets').choice('abcdefghijklmnopqrstuvwxyz0123456789') for _ in range(12))
-            console.print(f"[yellow]Создайте пользователя вручную в MariaDB:[/yellow]\nCREATE USER '{temp_user}'@'127.0.0.1' IDENTIFIED BY '{temp_pass}';\nGRANT ALL PRIVILEGES ON *.* TO '{temp_user}'@'127.0.0.1' WITH GRANT OPTION;\nFLUSH PRIVILEGES;")
+            console.print(f"[yellow]Создайте пользователя вручную в MariaDB:[/yellow]\nCREATE USER '{temp_user}'@'127.0.0.1' IDENTIFIED BY '{temp_pass}';\nCREATE USER '{temp_user}'@'localhost' IDENTIFIED BY '{temp_pass}';\nGRANT ALL PRIVILEGES ON *.* TO '{temp_user}'@'127.0.0.1' WITH GRANT OPTION;\nGRANT ALL PRIVILEGES ON *.* TO '{temp_user}'@'localhost' WITH GRANT OPTION;\nFLUSH PRIVILEGES;")
             inquirer.text(message="Нажмите Enter после создания пользователя...").execute()
+            # Сначала пробуем через 127.0.0.1
             result2 = try_remove_db_and_users({'host': '127.0.0.1', 'user': temp_user, 'password': temp_pass})
             if result2 is True:
                 console.print("[green]Удаление выполнено через временного пользователя![/green]")
             else:
-                console.print(f"[yellow]Ошибка при удалении с временным пользователем: {result2}[/yellow]")
+                # Если не удалось — пробуем через localhost
+                result3 = try_remove_db_and_users({'host': 'localhost', 'user': temp_user, 'password': temp_pass})
+                if result3 is True:
+                    console.print("[green]Удаление выполнено через временного пользователя (localhost)![/green]")
+                else:
+                    console.print(f"[yellow]Ошибка при удалении с временным пользователем: {result2} и {result3}[/yellow]")
+            # Предлагаем удалить временного пользователя вручную
+            console.print("[yellow]Рекомендуется удалить временного пользователя после завершения:\nDROP USER IF EXISTS 'tempadmin'@'127.0.0.1';\nDROP USER IF EXISTS 'tempadmin'@'localhost';\nFLUSH PRIVILEGES;[/yellow]")
         return
     # 2. Если ошибка доступа — спросить пароль (старый путь)
     ask = inquirer.confirm(message="MariaDB требует пароль root. Ввести пароль?", default=True).execute()
@@ -1370,7 +1380,11 @@ def _remove_pterodactyl_db():
         if result2 is True:
             return
         else:
-            console.print(f"[yellow]Ошибка при удалении с паролем: {result2}[/yellow]")
+            result3 = try_remove_db_and_users({'host': 'localhost', 'user': 'root', 'password': root_pass})
+            if result3 is True:
+                return
+            else:
+                console.print(f"[yellow]Ошибка при удалении с паролем: {result2} и {result3}[/yellow]")
     # 3. Если всё равно не удалось — показать инструкцию
     console.print("[red]Не удалось автоматически подключиться к MariaDB как root. Удалите базы и пользователей вручную через консоль MariaDB:[/red]")
     console.print("""
@@ -1382,7 +1396,7 @@ def _remove_pterodactyl_db():
 3. Удалите базы:
    DROP DATABASE имя_базы;
 4. Посмотрите пользователей:
-   SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%';
+   SELECT User, Host FROM mysql.user WHERE User LIKE '%pterodactyl%' OR User LIKE '%admin%' OR User LIKE '%tempadmin%';
 5. Удалите пользователей:
    DROP USER 'пользователь'@'хост';
 6. FLUSH PRIVILEGES;
