@@ -897,6 +897,25 @@ def pterodactyl_install_wizard():
             admin_created = True
             break
         err = (res.stderr or res.stdout or "")
+        # --- Диагностика ошибки подключения к БД ---
+        if 'Connection refused' in err or 'SQLSTATE[HY000] [2002]' in err:
+            console.print(Panel(
+                "[red]Ошибка подключения к базе данных![/red]\n\n"
+                "Возможные причины:\n"
+                "- MariaDB не запущена (systemctl status mariadb)\n"
+                "- MariaDB не слушает порт 3306 на 127.0.0.1\n"
+                "- В .env указаны неправильные параметры DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_DATABASE\n"
+                "- Firewall или SELinux блокирует соединение\n"
+                "- База только что пересоздана, сервис не перезапущен\n\n"
+                "[bold]Проверьте:[/bold]\n"
+                "1. systemctl status mariadb\n"
+                "2. ss -tlnp | grep 3306\n"
+                "3. mysql -h 127.0.0.1 -u pterodactyl -p\n"
+                "4. Проверьте .env: DB_HOST=127.0.0.1, DB_PORT=3306, DB_DATABASE=panel, DB_USERNAME=pterodactyl, DB_PASSWORD=...\n"
+                "5. Перезапустите mariadb и php-fpm: systemctl restart mariadb && systemctl restart php8.3-fpm\n",
+                title="Диагностика подключения к БД", border_style="red"))
+            inquirer.text(message="Нажмите Enter после устранения проблемы...").execute()
+            continue
         if 'already been taken' in err:
             console.print(Panel(f"[yellow]Пользователь с email {admin_email} или username {admin_name} уже существует![/yellow]", title="Админ уже есть", border_style="yellow"))
             action = inquirer.select(message="Что сделать?", choices=["Сбросить пароль для существующего пользователя", "Ввести другой email/username", "Пропустить"], default="Сбросить пароль для существующего пользователя").execute()
@@ -905,11 +924,16 @@ def pterodactyl_install_wizard():
                 new_pass = inquirer.text(message="Новый пароль:", default=admin_pass).execute()
                 tinker_cmd = [
                     'php', 'artisan', 'tinker',
-                    '--execute', f"$user = \\Pterodactyl\\Models\\User::where('email', '{reset_email}')->first(); $user->password = bcrypt('{new_pass}'); $user->save();"
+                    '--execute', (
+                        f"$user = \\Pterodactyl\\Models\\User::where('email', '{reset_email}')->first(); "
+                        f"$user->password = bcrypt('{new_pass}'); "
+                        f"$user->root_admin = 1; "
+                        f"$user->save();"
+                    )
                 ]
-                res2 = run_command_with_dpkg_fix(tinker_cmd, spinner_message="Сброс пароля администратора...", cwd="/var/www/pterodactyl")
+                res2 = run_command_with_dpkg_fix(tinker_cmd, spinner_message="Сброс пароля администратора и выдача прав...", cwd="/var/www/pterodactyl")
                 if res2 and res2.returncode == 0:
-                    console.print(Panel(f"[green]Пароль для {reset_email} успешно сброшен! Новый пароль: {new_pass}", title="Пароль сброшен", border_style="green"))
+                    console.print(Panel(f"[green]Пароль для {reset_email} успешно сброшен! Пользователь теперь администратор. Новый пароль: {new_pass}", title="Пароль и права администратора обновлены", border_style="green"))
                     admin_created = True
                 else:
                     console.print(Panel((res2.stderr or res2.stdout or "[red]Ошибка сброса пароля[/red]"), title="Ошибка сброса пароля", border_style="red"))
@@ -1327,6 +1351,25 @@ def _remove_pterodactyl_db():
             conn.close()
             return True
         except Exception as e:
+            # --- Диагностика ошибки доступа ---
+            if isinstance(e, Exception) and '1698' in str(e):
+                console.print(Panel(
+                    f"[red]Ошибка доступа: {e}[/red]\n\n"
+                    "Возможные причины:\n"
+                    "- Пользователь не создан для нужного хоста (localhost/127.0.0.1)\n"
+                    "- MariaDB использует auth_socket для root (см. SELECT plugin FROM mysql.user WHERE User='root';)\n"
+                    "- Не был выполнен FLUSH PRIVILEGES после создания пользователя\n"
+                    "- Недостаточно прав у пользователя\n\n"
+                    "[bold]Решение:[/bold]\n"
+                    "- Создайте пользователя для обоих хостов:\n"
+                    "  CREATE USER 'tempadmin'@'127.0.0.1' IDENTIFIED BY '...';\n"
+                    "  CREATE USER 'tempadmin'@'localhost' IDENTIFIED BY '...';\n"
+                    "  GRANT ALL PRIVILEGES ON *.* TO 'tempadmin'@'127.0.0.1' WITH GRANT OPTION;\n"
+                    "  GRANT ALL PRIVILEGES ON *.* TO 'tempadmin'@'localhost' WITH GRANT OPTION;\n"
+                    "  FLUSH PRIVILEGES;\n"
+                    "- Проверьте, что MariaDB слушает порт 3306 на 127.0.0.1\n"
+                    "- Проверьте, что вы используете правильный пароль\n",
+                    title="Диагностика MariaDB: ошибка доступа", border_style="red"))
             return e
     # 1. Проверка подключения к MariaDB через socket (root без пароля)
     try:
