@@ -13,6 +13,7 @@ from modules.utils.pterodactyl_utils import (
     generate_password, update_env_file, run_artisan, setup_systemd_pteroq, setup_cron, setup_nginx,
     remove_systemd_pteroq, remove_cron, remove_nginx, remove_panel_files, remove_db_user_and_db
 )
+import pymysql
 
 console = Console()
 
@@ -231,14 +232,25 @@ def install_pterodactyl(console):
     console.print("[OK] Параметры БД записаны в .env")
     log("Параметры БД записаны в .env")
     # --- Проверка подключения к БД ---
-    mariadb2 = MariaDBManager(db_host, db_user, db_pass, db_port)
-    ok, err = mariadb2.test_connection(db_name)
-    if not ok:
-        console.print(f"[ОШИБКА] Не удалось подключиться к БД: {err}")
-        log(f"Не удалось подключиться к БД: {err}", level="ERROR")
+    try:
+        conn = pymysql.connect(host=db_host, user=db_user, password=db_pass, database=db_name, port=db_port, connect_timeout=5)
+        conn.close()
+        console.print(Panel(f"[green]Подключение к MySQL успешно![/green]", title="MariaDB", border_style="green"))
+    except Exception as e:
+        console.print(Panel(f"[red]Ошибка подключения к MySQL![/red]\n"
+                           f"Параметры:\n"
+                           f"  user: {db_user}\n  host: {db_host}\n  db: {db_name}\n  port: {db_port}\n  password: {db_pass}\n"
+                           f"Ошибка: {e}",
+                           title="[red]Ошибка MySQL[/red]", border_style="red"))
+        console.print("[yellow]Возможные причины:[/yellow]\n"
+                      "- Пользователь создан не для 127.0.0.1, а для localhost или другого хоста.\n"
+                      "- MariaDB слушает только сокет, а не 127.0.0.1.\n"
+                      "- Пароль не совпадает.\n"
+                      "- Firewall блокирует порт 3306.\n"
+                      "- Пользователь не имеет прав на базу.\n"
+                      "\n[bold]Проверьте параметры и попробуйте снова.[/bold]")
+        log(f"Ошибка подключения к MySQL: {e}", level="ERROR")
         return
-    console.print("[OK] Подключение к БД успешно!")
-    log("Подключение к БД успешно!")
     # --- Artisan setup (окружение, база, почта) ---
     console.print("[INFO] Настройка окружения панели...")
     run_artisan(panel_dir, "p:environment:setup", [
@@ -377,28 +389,38 @@ def install_pterodactyl_full_auto(console):
     author_email = "admin@example.com"
     subprocess.run(["php", "artisan", "key:generate", "--force"], cwd=panel_dir, check=True)
     # 6. Artisan setup
-    subprocess.run([
-        "php", "artisan", "p:environment:setup",
-        f"--author={author_email}",
-        "--url=http://localhost",
-        "--timezone=UTC",
-        "--cache=file",
-        "--session=file",
-        "--queue=redis",
-        "--redis-host=127.0.0.1",
-        "--redis-port=6379",
-        "--redis-pass=",
-        "--settings-ui=false",
-        "--telemetry=true"
-    ], cwd=panel_dir, check=True)
-    subprocess.run(["php", "artisan", "p:environment:database", f"--host={db_host}", f"--port={db_port}", f"--database={db_name}", f"--username={db_user}", f"--password={db_pass}"], cwd=panel_dir, check=True)
-    subprocess.run(["php", "artisan", "p:environment:mail", "--driver=smtp", "--email=no-reply@localhost", "--from=Pterodactyl Panel", "--host=localhost", "--port=25", "--username=", "--password=", "--encryption="], cwd=panel_dir, check=True)
+    try:
+        subprocess.run([
+            "php", "artisan", "p:environment:setup",
+            f"--author={author_email}",
+            "--url=http://localhost",
+            "--timezone=UTC",
+            "--cache=file",
+            "--session=file",
+            "--queue=redis",
+            "--redis-host=127.0.0.1",
+            "--redis-port=6379",
+            "--redis-pass=",
+            "--settings-ui=false",
+            "--telemetry=true"
+        ], cwd=panel_dir, check=True)
+        subprocess.run(["php", "artisan", "p:environment:database", f"--host={db_host}", f"--port={db_port}", f"--database={db_name}", f"--username={db_user}", f"--password={db_pass}"], cwd=panel_dir, check=True)
+        subprocess.run(["php", "artisan", "p:environment:mail", "--driver=smtp", "--email=no-reply@localhost", "--from=Pterodactyl Panel", "--host=localhost", "--port=25", "--username=", "--password=", "--encryption="], cwd=panel_dir, check=True)
+    except subprocess.CalledProcessError as e:
+        console.print(Panel(f"[red]Ошибка artisan setup![/red]\nКоманда: {e.cmd}\nКод возврата: {e.returncode}\nSTDOUT: {e.output if hasattr(e, 'output') else ''}\nSTDERR: {e.stderr if hasattr(e, 'stderr') else ''}", title="[red]Artisan ошибка[/red]", border_style="red"))
+        log(f"Artisan setup error: {e}", level="ERROR")
+        return
     # 7. Миграция и админ
-    subprocess.run(["php", "artisan", "migrate", "--seed", "--force"], cwd=panel_dir, check=True)
-    admin_email = "admin@localhost"
-    admin_user = "admin"
-    admin_pass = generate_password(12)
-    subprocess.run(["php", "artisan", "p:user:make", f"--email={admin_email}", f"--username={admin_user}", f"--name-first=Admin", f"--name-last=Admin", f"--password={admin_pass}", f"--admin=1"], cwd=panel_dir, check=True)
+    try:
+        subprocess.run(["php", "artisan", "migrate", "--seed", "--force"], cwd=panel_dir, check=True)
+        admin_email = "admin@localhost"
+        admin_user = "admin"
+        admin_pass = generate_password(12)
+        subprocess.run(["php", "artisan", "p:user:make", f"--email={admin_email}", f"--username={admin_user}", f"--name-first=Admin", f"--name-last=Admin", f"--password={admin_pass}", f"--admin=1"], cwd=panel_dir, check=True)
+    except subprocess.CalledProcessError as e:
+        console.print(Panel(f"[red]Ошибка artisan migrate/user![/red]\nКоманда: {e.cmd}\nКод возврата: {e.returncode}\nSTDOUT: {e.output if hasattr(e, 'output') else ''}\nSTDERR: {e.stderr if hasattr(e, 'stderr') else ''}", title="[red]Artisan ошибка[/red]", border_style="red"))
+        log(f"Artisan migrate/user error: {e}", level="ERROR")
+        return
     # 8. Права
     subprocess.run(["chown", "-R", "www-data:www-data", panel_dir], check=True)
     # 9. Systemd unit
